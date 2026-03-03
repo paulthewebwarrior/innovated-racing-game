@@ -360,7 +360,7 @@ def main():
                 player_car.current_speed = max(0.0, float(player_car.current_speed) * 0.5)
                 player_car.velocity_x *= 0.6
                 player_car.velocity_x = max(0.0, float(player_car.velocity_x) * 0.5)
-                apply_collision_damage(1.0)
+                # apply_collision_damage(1.0)
 
             br_hits = pygame.sprite.spritecollide(
                 player_car,
