@@ -47,6 +47,15 @@ class Controller:
         self.right_shift_active = False
         self._prev_left_shift_active = False
         self._prev_right_shift_active = False
+        self.swipe_up_detected = False
+        self.swipe_down_detected = False
+        self.question_select_requested = False
+        self._prev_question_select_active = False
+        self._question_select_closed_frames = 0
+        self.question_select_required_frames = 3
+        self._prev_right_hand_y = None
+        self.swipe_threshold = 0.02
+        self.require_two_hands = True
 
         self.lm = vision.HandLandmarker.create_from_options(
             HandLandmarkerOptions(
@@ -56,9 +65,9 @@ class Controller:
                 num_hands=2,
                 running_mode=vision.RunningMode.LIVE_STREAM,
                 result_callback=self.callback,
-                min_hand_detection_confidence=0.4,
-                min_hand_presence_confidence=0.4,
-                min_tracking_confidence=0.4,
+                min_hand_detection_confidence=0.5,
+                min_hand_presence_confidence=0.5,
+                min_tracking_confidence=0.5,
             )
         )
 
@@ -128,6 +137,10 @@ class Controller:
         """
         self.latest_result = result
 
+    def set_require_two_hands(self, required: bool) -> None:
+        """Set whether the controller should require two hands for processing."""
+        self.require_two_hands = bool(required)
+
     def _reset_controls(self) -> None:
         """
         Reset all derived control outputs to neutral defaults.
@@ -143,6 +156,12 @@ class Controller:
         self.right_shift_active = False
         self._prev_left_shift_active = False
         self._prev_right_shift_active = False
+        self.swipe_up_detected = False
+        self.swipe_down_detected = False
+        self.question_select_requested = False
+        self._prev_question_select_active = False
+        self._question_select_closed_frames = 0
+        self._prev_right_hand_y = None
 
     def _resolve_left_right_hands(self):
         """
@@ -203,6 +222,19 @@ class Controller:
             if hand_landmarks[tip_i].y > hand_landmarks[pip_i].y:
                 curled += 1
         return thumb_up and curled >= 3
+
+    @staticmethod
+    def _is_index_closed(hand_landmarks) -> bool:
+        """Detect a deliberate "index finger down" pose with stricter checks."""
+        index_tip = hand_landmarks[8]
+        index_pip = hand_landmarks[6]
+        index_mcp = hand_landmarks[5]
+
+        tip_below_pip = index_tip.y > (index_pip.y + 0.03)
+        tip_below_mcp = index_tip.y > (index_mcp.y + 0.05)
+        pip_below_mcp = index_pip.y > (index_mcp.y + 0.01)
+
+        return tip_below_pip and tip_below_mcp and pip_below_mcp
 
     def _update_shift_state(self, left_hand, right_hand) -> None:
         """
@@ -296,6 +328,28 @@ class Controller:
                 cx, cy = int(landmark.x * w), int(landmark.y * h)
                 cv2.circle(image, (cx, cy), 5, (0, 255, 0), -1)
 
+    def _detect_swipes(self, right_hand) -> None:
+        """
+        Detect swipe up/down gestures from right hand vertical movement.
+        
+        Compares current hand position to previous position. If hand moved up/down
+        beyond the swipe threshold, trigger the appropriate gesture.
+        """
+        right_palm = right_hand[0]
+        current_y = right_palm.y
+        
+        self.swipe_up_detected = False
+        self.swipe_down_detected = False
+        
+        if self._prev_right_hand_y is not None:
+            delta_y = self._prev_right_hand_y - current_y
+            if delta_y > self.swipe_threshold:
+                self.swipe_up_detected = True
+            elif delta_y < -self.swipe_threshold:
+                self.swipe_down_detected = True
+        
+        self._prev_right_hand_y = current_y
+
     def _process_two_hands(self, image) -> None:
         """
         Derive control states from two valid detected hands and annotate frame.
@@ -307,12 +361,62 @@ class Controller:
         self.breaking = not self.left_shift_active and not self.right_shift_active
         self._update_shift_state(left_hand, right_hand)
         self.boosting = self._is_thumb_up(left_hand)  # Left hand only for boost.
+        self._detect_swipes(right_hand)
 
         normalized_slope = self._compute_steer(left_wrist, right_wrist)
         self.steer = 0.0 if self.breaking else normalized_slope
 
         self._draw_status_overlays(image, normalized_slope)
         self._draw_hand_graphics(image, left_wrist, right_wrist)
+
+    def _process_question_hands(self, image) -> None:
+        """Process gestures for question mode where one hand is sufficient."""
+        hands = self.latest_result.hand_landmarks
+        if not hands:
+            self.swipe_up_detected = False
+            self.swipe_down_detected = False
+            self.question_select_requested = False
+            self._prev_question_select_active = False
+            self._question_select_closed_frames = 0
+            self._prev_right_hand_y = None
+            return
+
+        primary_hand = hands[0]
+        self._detect_swipes(primary_hand)
+        index_closed = any(self._is_index_closed(hand) for hand in hands)
+
+        if index_closed:
+            self._question_select_closed_frames += 1
+        else:
+            self._question_select_closed_frames = 0
+
+        select_active = (
+            self._question_select_closed_frames >= self.question_select_required_frames
+        )
+        self.question_select_requested = (
+            select_active and not self._prev_question_select_active
+        )
+        self._prev_question_select_active = select_active
+
+        self.steer = 0.0
+        self.breaking = False
+        self.shift_up_requested = False
+        self.shift_down_requested = False
+        self.left_shift_active = False
+        self.right_shift_active = False
+        self.boosting = False
+
+        h, w, _ = image.shape
+        for hand_landmarks in hands:
+            for a, b in config.HAND_CONNECTIONS:
+                la = hand_landmarks[a]
+                lb = hand_landmarks[b]
+                ax, ay = int(la.x * w), int(la.y * h)
+                bx, by = int(lb.x * w), int(lb.y * h)
+                cv2.line(image, (ax, ay), (bx, by), (0, 255, 0), 2)
+            for landmark in hand_landmarks:
+                cx, cy = int(landmark.x * w), int(landmark.y * h)
+                cv2.circle(image, (cx, cy), 5, (0, 255, 0), -1)
 
     def _draw_annotations_internal(self, image):
         """
@@ -325,7 +429,8 @@ class Controller:
             self._reset_controls()
             return image
 
-        if len(self.latest_result.hand_landmarks) != 2:
+        hand_count = len(self.latest_result.hand_landmarks)
+        if self.require_two_hands and hand_count != 2:
             cv2.putText(
                 image,
                 "Must be 2 hands",
@@ -338,7 +443,10 @@ class Controller:
             self._reset_controls()
             return image
 
-        self._process_two_hands(image)
+        if self.require_two_hands:
+            self._process_two_hands(image)
+        else:
+            self._process_question_hands(image)
 
         return image
 
@@ -354,6 +462,25 @@ class Controller:
         self.shift_down_requested = False
         self.shift_up_requested = False
         return down, up
+
+    def consume_swipe_request(self) -> tuple[bool, bool]:
+        """
+        Return and clear edge-triggered swipe requests.
+
+        Returns:
+            tuple[bool, bool]: (swipe_up_detected, swipe_down_detected)
+        """
+        up = self.swipe_up_detected
+        down = self.swipe_down_detected
+        self.swipe_up_detected = False
+        self.swipe_down_detected = False
+        return up, down
+
+    def consume_question_select_request(self) -> bool:
+        """Return and clear edge-triggered question selection gesture."""
+        requested = self.question_select_requested
+        self.question_select_requested = False
+        return requested
 
     def get_frame(self):
         """

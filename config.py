@@ -61,8 +61,46 @@ MAP_BORDER_OVERRIDES = {
 }
 
 # Player life system
-STARTING_LIVES = 5
-MAX_HEARTS = 5
+STARTING_LIVES = 1
+MAX_HEARTS = STARTING_LIVES
+
+# Last-chance questions
+# True/False format: {"prompt": str, "answer": bool}
+TRUE_FALSE_QUESTIONS = [
+    {
+        "prompt": "A data structure is used to organize and store data.",
+        "answer": True,
+    },
+    {
+        "prompt": "An array can store multiple values.",
+        "answer": True,
+    },
+    {
+        "prompt": "A stack follows LIFO (Last In, First Out).",
+        "answer": False,
+    },
+    {
+        "prompt": "A queue follows FIFO (First In, First Out).",
+        "answer": True,
+    },
+    {
+        "prompt": "A linked list is a linear data structure.",
+        "answer": True,
+    },
+    {
+        "prompt": "A binary tree can have at most three children per node.",
+        "answer": False,
+    },
+    {
+        "prompt": "A hash table uses key-value pairs for data storage.",
+        "answer": True,
+    }
+]
+
+# Multiple-choice format:
+# {"prompt": str, "options": [str, ...], "correct_index": int}
+# Keep empty if not used yet.
+MULTIPLE_CHOICE_QUESTIONS = []
 
 SETTING_OPTIONS = [
     "Car Speed",
