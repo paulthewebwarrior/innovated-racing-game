@@ -345,8 +345,6 @@ def main():
             ):
                 player_car.current_speed = 0
                 player_car.velocity_x = 0
-                if hasattr(player_car, 'velocity'):
-                    player_car.velocity = 0
                 apply_collision_damage(1.0)
 
             crack_hits = pygame.sprite.spritecollide(
