@@ -56,7 +56,7 @@ MAP_BORDER_OVERRIDES = {
     # - left / right: absolute x-pixel border positions
     # - left_ratio / right_ratio: border positions as 0.0..1.0 of screen width
     "city_roadfinal.png": {"left_ratio": 0.37, "right_ratio": 0.63},
-    "desert.png": {"left_ratio": 0.42, "right_ratio": 0.58},
+    "dessert upt.png": {"left_ratio": 0.37, "right_ratio": 0.63},
     "highway.png": {"left_ratio": 0.37, "right_ratio": 0.63},
 }
 
