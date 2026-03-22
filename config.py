@@ -94,7 +94,7 @@ TRUE_FALSE_QUESTIONS = [
     {
         "prompt": "A hash table uses key-value pairs for data storage.",
         "answer": True,
-    }
+    },
 ]
 
 # Multiple-choice format:
@@ -137,3 +137,28 @@ HAND_CONNECTIONS = (
     (9, 13),
     (13, 17),
 )
+
+SCORING_CONFIG = {
+    "base_multiplier": 10.0,
+    "time_factor": 0.001,
+    "top_speed_threshold": 0.90,
+    "top_speed_bonus": 50,
+    "accel_bonus_threshold": 8.0,
+    "accel_bonus": 25,
+    "combo_build_speed_ratio": 0.75,
+    "combo_max": 5.0,
+    "combo_decay_rate": 0.5,
+    "combo_reset_speed_ratio": 0.40,
+    "combo_rise_rate": 0.02,
+    "clean_drive_interval": 5000,
+    "clean_drive_bonus": 100,
+    "near_miss_threshold": 50,
+    "near_miss_bonus": 75,
+    "sharp_turn_threshold": 1.5,
+    "sharp_turn_bonus": 40,
+    "difficulty_ramp_interval": 10000,
+    "difficulty_ramp_factor": 1.05,
+    "max_difficulty": 3.0,
+    "score_soft_cap": 10000,
+    "soft_cap_diminish": 0.5,
+}

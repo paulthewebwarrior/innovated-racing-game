@@ -9,13 +9,13 @@ import pygame
 from pygame.key import ScancodeWrapper
 
 import config
-from config import SHOW_CAMERA, WINDOW_SIZE
+from config import SHOW_CAMERA, WINDOW_SIZE, SCORING_CONFIG
 from controller import Controller
 from environment.map import Map
 from environment.question_manager import QuestionManager
 from models.player_car import PlayerCar
 from models.question import Question
-from models.score import Score
+from models.score import Score, ScoringSystem
 from settings import Settings
 from ui.hud import PlayerHUD
 from ui.overlays import draw_game_over_overlay, draw_last_chance_overlay
@@ -92,12 +92,13 @@ def main():
     detector = Controller()
     detector.start_stream()
 
-    score = Score()
-    score.set_score(0)
+    scoring_system = ScoringSystem(SCORING_CONFIG)
     lives = float(max(1, int(config.STARTING_LIVES)))
     game_state = "playing"
     active_question: Question | None = None
     selected_option = 0
+    max_speed = player_car.max_speed
+    target_steer = 0.0
     question_input_unlock_at = 0
     question_manager = QuestionManager()
 
@@ -112,23 +113,23 @@ def main():
     logger.info("Press 'S' to open Settings.")
     selected_setting = 0
 
-    score_timer = 0
-    score_interval = 1000  # milliseconds
-    min_interval = 200  # minimum interval between score increases
-    interval_decrement = 10  # ms to decrease interval every 5 seconds
-    last_speedup = pygame.time.get_ticks()
+    last_frame_time = pygame.time.get_ticks()
 
     def reset_run_state() -> None:
         nonlocal lives
         nonlocal current_gear
         nonlocal boost_active, boost_end_time, boost_cooldown_end, prev_boosting
-        nonlocal out_of_control_until, oil_swerve_until, oil_swerve_started_at, oil_swerve_phase
-        nonlocal score_timer, score_interval, last_speedup
+        nonlocal \
+            out_of_control_until, \
+            oil_swerve_until, \
+            oil_swerve_started_at, \
+            oil_swerve_phase
         nonlocal game_state, active_question, selected_option
         nonlocal question_input_unlock_at
+        nonlocal last_frame_time
 
         lives = float(max(1, int(config.STARTING_LIVES)))
-        score.reset_score()
+        scoring_system.reset()
         player_car.rect.center = (
             WINDOW_SIZE["width"] // 2,
             WINDOW_SIZE["height"] - 240,
@@ -147,9 +148,7 @@ def main():
         oil_swerve_until = 0
         oil_swerve_started_at = 0
         oil_swerve_phase = 0.0
-        score_interval = 1000
-        score_timer = pygame.time.get_ticks()
-        last_speedup = pygame.time.get_ticks()
+        last_frame_time = pygame.time.get_ticks()
         settings.visible = False
         game_state = "playing"
         active_question = None
@@ -166,7 +165,12 @@ def main():
         settings.visible = False
 
     def resolve_question_answer(answer_index: int) -> None:
-        nonlocal lives, game_state, active_question, selected_option, question_input_unlock_at
+        nonlocal \
+            lives, \
+            game_state, \
+            active_question, \
+            selected_option, \
+            question_input_unlock_at
         if active_question is None:
             return
 
@@ -184,6 +188,7 @@ def main():
         nonlocal lives
         if game_state != "playing":
             return
+        scoring_system.register_collision(pygame.time.get_ticks())
         if lives <= 1.0:
             trigger_last_chance_question()
             return
@@ -209,7 +214,10 @@ def main():
             if game_state == "question":
                 if event.type == pygame.KEYDOWN and active_question is not None:
                     selected_answer = key_to_option_index(event.key)
-                    if selected_answer is not None and selected_answer < active_question.answer_count:
+                    if (
+                        selected_answer is not None
+                        and selected_answer < active_question.answer_count
+                    ):
                         resolve_question_answer(selected_answer)
                 continue
 
@@ -234,13 +242,14 @@ def main():
             if question_input_ready and swipe_up:
                 selected_option = max(0, selected_option - 1)
             if question_input_ready and swipe_down:
-                selected_option = min(active_question.answer_count - 1, selected_option + 1)
+                selected_option = min(
+                    active_question.answer_count - 1, selected_option + 1
+                )
 
             if question_input_ready and detector.consume_question_select_request():
                 resolve_question_answer(selected_option)
 
         if game_state == "playing" and not settings.visible:
-
             detector.brake_threshold = settings.get_brake_threshold()
 
             frame = detector.get_frame()
@@ -254,10 +263,15 @@ def main():
             # --- BOOST FEATURE ---
             now = pygame.time.get_ticks()
             # Only trigger boost on new thumbs up (rising edge)
-            if detector.boosting and not prev_boosting and not boost_active and now > boost_cooldown_end:
+            if (
+                detector.boosting
+                and not prev_boosting
+                and not boost_active
+                and now > boost_cooldown_end
+            ):
                 boost_active = True
-                boost_end_time = now + 1000 
-                boost_cooldown_end = now + 10000 
+                boost_end_time = now + 1000
+                boost_cooldown_end = now + 10000
             if boost_active and now > boost_end_time:
                 boost_active = False
             prev_boosting = detector.boosting
@@ -287,9 +301,7 @@ def main():
                     (now * frequency * 1.9) + (oil_swerve_phase * 0.6)
                 )
                 target_steer = (
-                    (base_wave + secondary_wave)
-                    * config.OIL_SWERVE_STRENGTH
-                    * envelope
+                    (base_wave + secondary_wave) * config.OIL_SWERVE_STRENGTH * envelope
                 )
                 if now < out_of_control_until:
                     target_steer = -target_steer
@@ -309,7 +321,7 @@ def main():
             max_speed = player_car.max_speed * gear_speed_ratio[current_gear]
             if boost_active:
                 acceleration *= 3  # 3x acceleration
-                max_speed *= 1.7   # 70% higher top speed during boost
+                max_speed *= 1.7  # 70% higher top speed during boost
 
             player_car.update(
                 steering=target_steer,
@@ -322,7 +334,7 @@ def main():
             )
 
             game_map.speed = float(player_car.current_speed)
-            game_map.update_score(score.get_score())
+            game_map.update_score(scoring_system.get_score())
             game_map.update(is_braking=is_breaking)
 
             road_min_x, road_max_x = game_map.get_road_borders()
@@ -355,7 +367,9 @@ def main():
             )
             if crack_hits:
                 out_of_control_until = now + 1000
-                player_car.current_speed = max(0.0, float(player_car.current_speed) * 0.5)
+                player_car.current_speed = max(
+                    0.0, float(player_car.current_speed) * 0.5
+                )
                 player_car.velocity_x *= 0.6
                 player_car.velocity_x = max(0.0, float(player_car.velocity_x) * 0.5)
                 # apply_collision_damage(1.0)
@@ -396,10 +410,15 @@ def main():
             player_car,
             detector,
             gear=str(current_gear),
-            score=score.get_score(),
+            score=scoring_system.get_score(),
             lives=lives,
             fps=int(fps),
             max_fps=settings.max_fps,
+        )
+        hud.set_scoring_info(
+            combo=scoring_system.get_combo(),
+            difficulty=scoring_system.get_difficulty(),
+            distance=scoring_system.get_distance(),
         )
         hud.draw(screen)
 
@@ -408,13 +427,10 @@ def main():
         )
         obs_y = hud.position[1] + hud.size[1] + 10
         screen.blit(obs_text, (10, obs_y))
-        lane_text = font.render(
-            f"Lanes: {settings.lane_count}", True, (200, 200, 200)
-        )
+        lane_text = font.render(f"Lanes: {settings.lane_count}", True, (200, 200, 200))
         screen.blit(lane_text, (10, obs_y + font.get_linesize()))
 
         if settings.visible:
-
             settings.draw_settings_menu(
                 screen, font, settings, selected_setting, config.SETTING_OPTIONS
             )
@@ -432,33 +448,30 @@ def main():
                 screen,
                 overlay_title_font,
                 overlay_body_font,
-                score.get_score(),
+                scoring_system.get_score(),
             )
 
         pygame.display.flip()
 
-        # Scoring system: add 2 points every score_interval ms, speed up over time, 
-        # but pause if breaking
         now = pygame.time.get_ticks()
-        if game_state == "playing" and not is_breaking:
-            if now - score_timer >= score_interval:
-                score.add_score(1 * round(player_car.current_speed / 2))
-                score_timer = now
+        delta_time = now - last_frame_time
+        last_frame_time = now
 
-        # Every 5 seconds, decrease interval (speed up scoring), but not below min_interval
-        if game_state == "playing" and now - last_speedup >= 5000 and score_interval > min_interval:
-            score_interval = max(min_interval, score_interval - interval_decrement)
-            last_speedup = now
+        if game_state == "playing":
+            scoring_status = scoring_system.update(
+                current_speed=player_car.current_speed,
+                max_speed=max_speed,
+                delta_time=delta_time,
+                steering=target_steer,
+                is_braking=is_breaking,
+                current_time=now,
+                obstacles=list(game_map.obstacles) if game_map.obstacles else None,
+            )
 
-        # Every 100 points, speed up scoring (decrease interval), but not below min_interval
-        if game_state == "playing" and score.get_score() > 0 and score.get_score() % 100 == 0:
-            score_interval = max(min_interval, score_interval - interval_decrement)
-
-        # sa every 400 points, nag-add 1 to speed
         if player_car.max_speed <= 20:
-            speed_bonus = score.get_score() // settings.speed_bonus
+            speed_bonus = scoring_system.get_score() // settings.speed_bonus
             player_car.set_max_speed(settings.car_speed + speed_bonus)
-        
+
         clock.tick(settings.max_fps)
 
     detector.stop_stream()
@@ -487,8 +500,6 @@ def steer(
         target_steer = 1.0 * steering_sensitivity
         turn = "RIGHT"
     return target_steer, turn
-
-
 
 
 if __name__ == "__main__":

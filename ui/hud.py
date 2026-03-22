@@ -35,6 +35,9 @@ class PlayerHUD:
         self.fps: Optional[int] = None
         self.max_fps: Optional[int] = None
         self._camera_frame = None
+        self.combo: float = 1.0
+        self.difficulty: float = 1.0
+        self.distance: float = 0.0
 
         self.font = font
         self.position = position
@@ -85,6 +88,13 @@ class PlayerHUD:
     def set_speed(self, current_speed: float, max_speed: float) -> None:
         self.speed = current_speed
         self.max_speed = max_speed
+
+    def set_scoring_info(
+        self, combo: float, difficulty: float, distance: float
+    ) -> None:
+        self.combo = combo
+        self.difficulty = difficulty
+        self.distance = distance
 
     def draw(self, screen: pygame.Surface) -> None:
         panel = pygame.Surface(self.size, pygame.SRCALPHA)
@@ -141,6 +151,37 @@ class PlayerHUD:
         if self.score is not None:
             screen.blit(
                 self.font.render(f"Score: {self.score}", True, self._text_color),
+                (x + padding, text_y),
+            )
+            text_y += line_height
+
+        if self.combo > 1.0:
+            combo_color = (
+                self._accent_color
+                if self.combo < 3.0
+                else (255, 200, 0)
+                if self.combo < 4.0
+                else (255, 100, 0)
+            )
+            screen.blit(
+                self.font.render(f"Combo: x{self.combo:.1f}", True, combo_color),
+                (x + padding, text_y),
+            )
+            text_y += line_height
+
+        if self.difficulty > 1.0:
+            screen.blit(
+                self.font.render(
+                    f"Diff: x{self.difficulty:.2f}", True, self._muted_color
+                ),
+                (x + padding, text_y),
+            )
+            text_y += line_height
+
+        if self.distance > 0:
+            dist_text = f"Dist: {int(self.distance)}m"
+            screen.blit(
+                self.font.render(dist_text, True, self._muted_color),
                 (x + padding, text_y),
             )
             text_y += line_height
@@ -308,7 +349,9 @@ class PlayerHUD:
         gap = 10
         icon_count = 4
         if max_width is not None and max_width > 0:
-            while size > 28 and (size * icon_count + gap * (icon_count - 1)) > max_width:
+            while (
+                size > 28 and (size * icon_count + gap * (icon_count - 1)) > max_width
+            ):
                 size -= 2
                 gap = max(6, gap - 1)
 
