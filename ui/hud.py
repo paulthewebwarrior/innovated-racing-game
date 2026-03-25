@@ -17,8 +17,8 @@ class PlayerHUD:
         controller: Controller,
         font: pygame.font.Font,
         position: tuple[int, int] = (10, 10),
-        size: tuple[int, int] = (500, 280),
-        camera_preview_size: tuple[int, int] = (200, 150),
+        size: tuple[int, int] = (320, 260),
+        camera_preview_size: tuple[int, int] = (180, 135),
         show_camera_preview: bool = True,
     ) -> None:
         self.speed = player_car.current_speed
@@ -38,18 +38,37 @@ class PlayerHUD:
         self.combo: float = 1.0
         self.difficulty: float = 1.0
         self.distance: float = 0.0
+        self._bonus_pulse = 0.0
+        self._pulse_direction = 1
 
         self.font = font
+        self.font_large = pygame.font.Font(None, 48)
+        self.font_medium = pygame.font.Font(None, 32)
+        self.font_small = pygame.font.Font(None, 20)
         self.position = position
         self.size = size
         self.camera_preview_size = camera_preview_size
         self.show_camera_preview = show_camera_preview
 
-        self._panel_color = (0, 0, 0, 160)
-        self._text_color = (255, 255, 255)
-        self._accent_color = (0, 200, 255)
-        self._warn_color = (255, 80, 80)
-        self._muted_color = (120, 120, 120)
+        self._bg_color = (10, 10, 20, 200)
+        self._panel_bg = (15, 15, 30, 220)
+        self._text_color = (230, 230, 240)
+        self._accent_color = (0, 210, 255)
+        self._accent_glow = (0, 150, 200)
+        self._warn_color = (255, 70, 70)
+        self._success_color = (70, 255, 140)
+        self._gold_color = (255, 200, 50)
+        self._muted_color = (100, 100, 120)
+
+        self._score_panel_surf: Optional[pygame.Surface] = None
+        self._score_panel_size = (280, 120)
+        self._stats_panel_surf: Optional[pygame.Surface] = None
+        self._stats_panel_size = (200, 100)
+        self._speedometer_surf: Optional[pygame.Surface] = None
+        self._speedometer_size = (160, 160)
+        self._lives_surf: Optional[pygame.Surface] = None
+        self._last_lives: Optional[float] = None
+        self._needs_panel_update = True
 
     def update_from_game(
         self,
@@ -96,178 +115,312 @@ class PlayerHUD:
         self.difficulty = difficulty
         self.distance = distance
 
+    def _update_pulse(self, dt: float) -> None:
+        self._bonus_pulse += dt * 3.0 * self._pulse_direction
+        if self._bonus_pulse >= 1.0:
+            self._bonus_pulse = 1.0
+            self._pulse_direction = -1
+        elif self._bonus_pulse <= 0.0:
+            self._bonus_pulse = 0.0
+            self._pulse_direction = 1
+
     def draw(self, screen: pygame.Surface) -> None:
-        panel = pygame.Surface(self.size, pygame.SRCALPHA)
-        panel.fill(self._panel_color)
-        screen.blit(panel, self.position)
-
-        x, y = self.position
-        padding = 10
-        line_height = self.font.get_linesize()
-        text_y = y + padding
-
-        # Layout: panel is dedicated to telemetry/info only.
-        left_w = max(0, self.size[0] - (padding * 2))
-
+        self._update_pulse(0.016)
+        screen_w, screen_h = screen.get_size()
+        self._draw_score_panel_top_right(screen)
+        self._draw_speedometer_center_top(screen)
+        self._draw_stats_panel_bottom_left(screen)
+        self._draw_gesture_indicator_bottom_right(screen)
         if self.show_camera_preview:
             self._draw_camera_preview_bottom_right(screen, self.camera_preview_size)
+        self._draw_lives_top_left(screen)
 
-        speed_text = f"Speed: {self.speed:.1f} / {self.max_speed:.1f}"
-        screen.blit(
-            self.font.render(speed_text, True, self._text_color),
-            (x + padding, text_y),
-        )
-        text_y += line_height
+    def _draw_simple_panel(
+        self,
+        surface: pygame.Surface,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        bg_alpha: int = 180,
+    ) -> None:
+        panel = pygame.Surface((w, h), pygame.SRCALPHA)
+        bg = (15, 15, 30, bg_alpha)
+        panel.fill(bg)
+        pygame.draw.rect(panel, (40, 40, 60), panel.get_rect(), 1, border_radius=10)
+        surface.blit(panel, (x, y))
 
-        gear_text = f"Gear: {self.gear}"
-        screen.blit(
-            self.font.render(gear_text, True, self._text_color),
-            (x + padding, text_y),
-        )
-        text_y += line_height
+    def _draw_score_panel_top_right(self, screen: pygame.Surface) -> None:
+        panel_w, panel_h = self._score_panel_size
+        margin = 20
+        x = screen.get_width() - panel_w - margin
+        y = margin
 
-        shift_text = "Shift: L1(-) / R1(+)"
-        screen.blit(
-            self.font.render(shift_text, True, self._muted_color),
-            (x + padding, text_y),
-        )
-        text_y += line_height
+        if self._score_panel_surf is None:
+            self._score_panel_surf = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+            self._needs_panel_update = True
 
-        steer_text = f"Steer: {self.steer:+.2f}"
-        screen.blit(
-            self.font.render(steer_text, True, self._text_color),
-            (x + padding, text_y),
-        )
-        text_y += line_height
+        if self._needs_panel_update or True:
+            self._score_panel_surf.fill((0, 0, 0, 0))
 
-        brake_color = self._warn_color if self.is_braking else self._accent_color
-        brake_text = "BRAKE" if self.is_braking else "THROTTLE"
-        screen.blit(
-            self.font.render(f"State: {brake_text}", True, brake_color),
-            (x + padding, text_y),
-        )
-        text_y += line_height
-
-        if self.score is not None:
-            screen.blit(
-                self.font.render(f"Score: {self.score}", True, self._text_color),
-                (x + padding, text_y),
+            bg = (15, 15, 30, 220)
+            pygame.draw.rect(
+                self._score_panel_surf, bg, (0, 0, panel_w, panel_h), border_radius=12
             )
-            text_y += line_height
-
-        if self.combo > 1.0:
-            combo_color = (
-                self._accent_color
-                if self.combo < 3.0
-                else (255, 200, 0)
-                if self.combo < 4.0
-                else (255, 100, 0)
+            pygame.draw.rect(
+                self._score_panel_surf,
+                (40, 40, 60),
+                (0, 0, panel_w, panel_h),
+                1,
+                border_radius=12,
             )
-            screen.blit(
-                self.font.render(f"Combo: x{self.combo:.1f}", True, combo_color),
-                (x + padding, text_y),
-            )
-            text_y += line_height
-
-        if self.difficulty > 1.0:
-            screen.blit(
-                self.font.render(
-                    f"Diff: x{self.difficulty:.2f}", True, self._muted_color
-                ),
-                (x + padding, text_y),
-            )
-            text_y += line_height
-
-        if self.distance > 0:
-            dist_text = f"Dist: {int(self.distance)}m"
-            screen.blit(
-                self.font.render(dist_text, True, self._muted_color),
-                (x + padding, text_y),
-            )
-            text_y += line_height
-
-        if self.fps is not None and self.max_fps is not None:
-            fps_text = f"FPS: {self.fps} / {self.max_fps}"
-            screen.blit(
-                self.font.render(fps_text, True, self._text_color),
-                (x + padding, text_y),
+            pygame.draw.rect(
+                self._score_panel_surf,
+                self._accent_color,
+                (0, 0, panel_w, 3),
+                border_radius=12,
             )
 
-        # Gesture recognized icons within the HUD panel.
-        icon_size = 46
-        icon_x = x + padding
-        icon_y = y + self.size[1] - padding - 8 - icon_size - 10
-        self._draw_gesture_icons(screen, (icon_x, icon_y), max_width=left_w)
+            score_text = f"{self.score or 0:,}"
+            score_surf = self.font_large.render(score_text, True, self._text_color)
+            label_surf = self.font_small.render("SCORE", True, self._muted_color)
 
-        self._draw_speed_bar(
-            screen, x + padding, y + self.size[1] - padding - 8, max_width=left_w
-        )
+            self._score_panel_surf.blit(label_surf, (20, 12))
+            self._score_panel_surf.blit(score_surf, (20, 30))
 
-        # Speedometer + acceleration dial at the top center of the screen, side-by-side.
+            combo_active = self.combo > 1.0
+            if combo_active:
+                pulse_alpha = int(150 + 105 * self._bonus_pulse)
+                combo_color = (
+                    self._accent_color
+                    if self.combo < 3.0
+                    else self._gold_color
+                    if self.combo < 4.0
+                    else self._warn_color
+                )
+                combo_text = f"x{self.combo:.1f}"
+                combo_surf = self.font_medium.render(combo_text, True, combo_color)
+                self._score_panel_surf.blit(combo_surf, (20, 85))
+
+            if self.difficulty > 1.0:
+                diff_text = f"DIFF x{self.difficulty:.2f}"
+                diff_surf = self.font_small.render(diff_text, True, self._muted_color)
+                dx = 100 if combo_active else 20
+                self._score_panel_surf.blit(diff_surf, (dx, 90))
+
+        screen.blit(self._score_panel_surf, (x, y))
+
+    def _draw_speedometer_center_top(self, screen: pygame.Surface) -> None:
         screen_w = screen.get_width()
-        speed_radius = 48
-        accel_radius = 36
-        top_margin = 10
-        horizontal_gap = 20
+        radius = 65
+        center_x = screen_w // 2
+        center_y = radius + 15
 
-        # Arrange dials horizontally: speed on left, accel on right, centered overall
-        total_width = speed_radius * 2 + accel_radius * 2 + horizontal_gap
-        left_x = (screen_w - total_width) // 2
-        center_y = top_margin + speed_radius
+        if self._speedometer_surf is None:
+            self._speedometer_surf = pygame.Surface(
+                (radius * 2 + 20, radius * 2 + 20), pygame.SRCALPHA
+            )
 
-        speed_center = (left_x + speed_radius, center_y)
-        accel_center = (
-            left_x + speed_radius * 2 + horizontal_gap + accel_radius,
-            center_y,
+        self._speedometer_surf.fill((0, 0, 0, 0))
+        surf = self._speedometer_surf
+        offset = 10
+        cx = radius + offset
+        cy = radius + offset
+
+        pygame.draw.circle(surf, (20, 20, 30), (cx, cy), radius + 8)
+        pygame.draw.circle(surf, (30, 30, 50), (cx, cy), radius)
+
+        start_angle = math.radians(135)
+        end_angle = math.radians(405)
+        rect = pygame.Rect(cx - radius, cy - radius, radius * 2, radius * 2)
+        pygame.draw.arc(surf, (50, 50, 70), rect, start_angle, end_angle, 6)
+
+        tick_count = 10
+        for i in range(tick_count + 1):
+            tick_ratio = i / tick_count
+            tick_angle = start_angle + (end_angle - start_angle) * tick_ratio
+            inner_r = radius - 15
+            outer_r = radius - 5
+            x1 = cx + int(inner_r * math.cos(tick_angle))
+            y1 = cy - int(inner_r * math.sin(tick_angle))
+            x2 = cx + int(outer_r * math.cos(tick_angle))
+            y2 = cy - int(outer_r * math.sin(tick_angle))
+            pygame.draw.line(surf, (80, 80, 100), (x1, y1), (x2, y2), 2)
+
+        ratio = max(0.0, min(self.speed / max(1, self.max_speed), 1.0))
+        needle_end_angle = start_angle + (end_angle - start_angle) * ratio
+        needle_len = radius - 18
+        nx = cx + int(needle_len * math.cos(needle_end_angle))
+        ny = cy - int(needle_len * math.sin(needle_end_angle))
+
+        needle_color = self._warn_color if self.is_braking else self._accent_color
+        pygame.draw.line(surf, needle_color, (cx, cy), (nx, ny), 4)
+        pygame.draw.circle(surf, needle_color, (cx, cy), 8)
+        pygame.draw.circle(surf, (255, 255, 255), (cx, cy), 4)
+
+        speed_str = f"{self.speed:.0f}"
+        speed_surf = self.font_large.render(speed_str, True, self._text_color)
+        speed_rect = speed_surf.get_rect(center=(cx, cy + 15))
+        surf.blit(speed_surf, speed_rect)
+
+        unit_surf = self.font_small.render("km/h", True, self._muted_color)
+        unit_rect = unit_surf.get_rect(center=(cx, cy + 35))
+        surf.blit(unit_surf, unit_rect)
+
+        screen.blit(
+            self._speedometer_surf,
+            (center_x - radius - offset, center_y - radius - offset),
         )
 
-        self._draw_speedometer(screen, speed_center, speed_radius)
-        self._draw_accelometer(screen, accel_center, accel_radius)
-        self._draw_lives_bottom_left(screen)
+    def _draw_stats_panel_bottom_left(self, screen: pygame.Surface) -> None:
+        panel_w, panel_h = self._stats_panel_size
+        margin = 20
+        x = margin
+        y = screen.get_height() - panel_h - margin
 
-    def _draw_lives_bottom_left(self, screen: pygame.Surface) -> None:
+        if self._stats_panel_surf is None:
+            self._stats_panel_surf = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+
+        self._stats_panel_surf.fill((0, 0, 0, 0))
+        bg = (15, 15, 30, 200)
+        pygame.draw.rect(
+            self._stats_panel_surf, bg, (0, 0, panel_w, panel_h), border_radius=10
+        )
+        pygame.draw.rect(
+            self._stats_panel_surf,
+            (50, 50, 70),
+            (0, 0, panel_w, panel_h),
+            1,
+            border_radius=10,
+        )
+
+        line_h = 22
+        col1_x = 15
+        col2_x = panel_w // 2 + 5
+        start_y = 15
+
+        labels = ["SPD", "GEAR", "DIST"]
+        values = [f"{self.speed:.0f}", self.gear, f"{int(self.distance)}m"]
+
+        for i, (label, value) in enumerate(zip(labels, values)):
+            lx = col1_x if i % 2 == 0 else col2_x
+            ly = start_y + (i // 2) * (line_h + 12)
+            self._stats_panel_surf.blit(
+                self.font_small.render(label, True, self._muted_color), (lx, ly)
+            )
+            self._stats_panel_surf.blit(
+                self.font_medium.render(value, True, self._text_color), (lx, ly + 15)
+            )
+
+        screen.blit(self._stats_panel_surf, (x, y))
+
+    def _draw_gesture_indicator_bottom_right(self, screen: pygame.Surface) -> None:
+        margin = 20
+        icon_size = 42
+        spacing = 8
+        icon_count = 2
+        total_w = icon_size * icon_count + spacing * (icon_count - 1)
+
+        cam_offset = (
+            self.camera_preview_size[0] + margin if self.show_camera_preview else 0
+        )
+        start_x = screen.get_width() - total_w - margin - cam_offset
+        start_y = screen.get_height() - icon_size - margin
+
+        if self.is_braking:
+            self._draw_gesture_icon_simple(
+                screen, (start_x, start_y), icon_size, "brake", self._warn_color
+            )
+        else:
+            self._draw_gesture_icon_simple(
+                screen, (start_x, start_y), icon_size, "throttle", self._accent_color
+            )
+
+        steer_dir = (
+            "left" if self.steer < -0.4 else "right" if self.steer > 0.4 else "center"
+        )
+        self._draw_gesture_icon_simple(
+            screen,
+            (start_x + icon_size + spacing, start_y),
+            icon_size,
+            "steer",
+            steer_dir,
+        )
+
+    def _draw_gesture_icon_simple(
+        self, screen: pygame.Surface, pos: tuple, size: int, icon_type: str, state
+    ) -> None:
+        x, y = pos
+        rect = pygame.Rect(x, y, size, size)
+
+        bg_color = (25, 25, 40) if icon_type != "brake" else (50, 20, 20)
+        border_color = (
+            state
+            if isinstance(state, tuple)
+            else (self._accent_color if state != "center" else self._muted_color)
+        )
+
+        pygame.draw.rect(screen, bg_color, rect, border_radius=8)
+        pygame.draw.rect(screen, border_color, rect, 2, border_radius=8)
+
+        cx, cy = x + size // 2, y + size // 2
+
+        if icon_type == "brake":
+            pygame.draw.circle(screen, self._warn_color, (cx, cy), size // 4)
+        elif icon_type == "throttle":
+            inner = size // 4
+            bar_h = size // 2
+            bar_rect = pygame.Rect(cx - inner, cy + inner // 2, inner * 2, bar_h)
+            pygame.draw.rect(screen, border_color, bar_rect, border_radius=3)
+        elif icon_type == "steer":
+            if state == "left":
+                pts = [(cx - 8, cy), (cx + 6, cy - 8), (cx + 6, cy + 8)]
+            elif state == "right":
+                pts = [(cx + 8, cy), (cx - 6, cy - 8), (cx - 6, cy + 8)]
+            else:
+                pygame.draw.circle(screen, self._muted_color, (cx, cy), 5)
+                return
+            pygame.draw.polygon(screen, border_color, pts)
+
+    def _draw_lives_top_left(self, screen: pygame.Surface) -> None:
         if self.lives is None:
             return
 
-        max_hearts = max(
-            1,
-            int(config.MAX_HEARTS),
-            int(config.STARTING_LIVES),
-        )
-        clamped_lives = max(0.0, min(float(max_hearts), float(self.lives)))
-        full_hearts = int(clamped_lives)
-        has_half = (clamped_lives - full_hearts) >= 0.5
-        empty_hearts = max_hearts - full_hearts - (1 if has_half else 0)
+        if self._lives_surf is None or self._last_lives != self.lives:
+            self._last_lives = self.lives
+            max_hearts = max(1, int(config.MAX_HEARTS), int(config.STARTING_LIVES))
+            clamped_lives = max(0.0, min(float(max_hearts), float(self.lives)))
+            full_hearts = int(clamped_lives)
+            has_half = (clamped_lives - full_hearts) >= 0.5
+            empty_hearts = max_hearts - full_hearts - (1 if has_half else 0)
 
-        filled = "♥" * full_hearts
-        half = "½" if has_half else ""
-        empty = "♡" * max(0, empty_hearts)
+            heart_size = 24
+            spacing = 4
+            surf_w = max_hearts * heart_size + (max_hearts - 1) * spacing
+            surf_h = self.font_small.get_height() + 5 + heart_size + 10
 
-        heart_text = f"{filled}{half}{empty}"
-        label = self.font.render("Lives", True, self._text_color)
-        hearts = self.font.render(heart_text, True, self._warn_color)
+            self._lives_surf = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+            self._lives_surf.fill((0, 0, 0, 0))
 
-        margin = 16
-        label_x = margin
-        hearts_x = margin
-        hearts_y = screen.get_height() - margin - hearts.get_height()
-        label_y = hearts_y - label.get_height() - 4
+            label = self.font_small.render("LIVES", True, self._muted_color)
+            self._lives_surf.blit(label, (0, 0))
 
-        screen.blit(label, (label_x, label_y))
-        screen.blit(hearts, (hearts_x, hearts_y))
+            for i in range(full_hearts):
+                char_surf = self.font_medium.render("●", True, self._warn_color)
+                self._lives_surf.blit(char_surf, (i * (heart_size + spacing), 18))
+            if has_half:
+                char_surf = self.font_medium.render("◐", True, self._warn_color)
+                self._lives_surf.blit(
+                    char_surf, (full_hearts * (heart_size + spacing), 18)
+                )
+            for i in range(empty_hearts):
+                char_surf = self.font_medium.render("○", True, (60, 60, 70))
+                offset = (full_hearts + (1 if has_half else 0)) * (heart_size + spacing)
+                self._lives_surf.blit(
+                    char_surf, (offset + i * (heart_size + spacing), 18)
+                )
 
-    def _draw_speed_bar(
-        self, screen: pygame.Surface, x: int, y: int, max_width: Optional[int] = None
-    ) -> None:
-        bar_width = self.size[0] - 2 * 10
-        if max_width is not None and max_width > 0:
-            bar_width = min(bar_width, max_width)
-        bar_height = 8
-        ratio = 0.0 if self.max_speed <= 0 else min(self.speed / self.max_speed, 1.0)
-        fill_width = int(bar_width * ratio)
-
-        pygame.draw.rect(screen, (40, 40, 40), (x, y, bar_width, bar_height))
-        pygame.draw.rect(screen, self._accent_color, (x, y, fill_width, bar_height))
+        screen.blit(self._lives_surf, (15, 15))
 
     def _compute_gear(self, speed: float, max_speed: float) -> str:
         if speed <= 0.1:
@@ -277,186 +430,6 @@ class PlayerHUD:
         ratio = max(0.0, min(speed / max_speed, 1.0))
         gear = 1 + int(ratio * 4.999)
         return str(min(5, max(1, gear)))
-
-    def _draw_speedometer(
-        self, screen: pygame.Surface, center: tuple[int, int], radius: int
-    ) -> None:
-        cx, cy = center
-        rect = pygame.Rect(cx - radius, cy - radius, radius * 2, radius * 2)
-
-        # Background dial.
-        pygame.draw.circle(screen, (20, 20, 20), center, radius)
-        pygame.draw.circle(screen, self._accent_color, center, radius, 2)
-
-        # Arc from 225deg to -45deg (i.e. 270deg sweep).
-        start_angle = math.radians(225)
-        end_angle = math.radians(-45)
-        pygame.draw.arc(screen, self._muted_color, rect, end_angle, start_angle, 3)
-
-        ratio = (
-            0.0
-            if self.max_speed <= 0
-            else max(0.0, min(self.speed / self.max_speed, 1.0))
-        )
-        needle_angle = start_angle - ratio * (start_angle - end_angle)
-        nx = cx + int((radius - 8) * math.cos(needle_angle))
-        ny = cy - int((radius - 8) * math.sin(needle_angle))
-        needle_color = self._warn_color if self.is_braking else self._accent_color
-        pygame.draw.line(screen, needle_color, center, (nx, ny), 3)
-        pygame.draw.circle(screen, self._text_color, center, 4)
-
-        speed_value = self.font.render(f"{self.speed:.0f}", True, self._text_color)
-        screen.blit(speed_value, speed_value.get_rect(center=(cx, cy + 8)))
-
-    def _draw_accelometer(
-        self, screen: pygame.Surface, center: tuple[int, int], radius: int
-    ) -> None:
-        cx, cy = center
-        rect = pygame.Rect(cx - radius, cy - radius, radius * 2, radius * 2)
-
-        pygame.draw.circle(screen, (20, 20, 20), center, radius)
-        pygame.draw.circle(screen, self._accent_color, center, radius, 2)
-
-        start_angle = math.radians(225)
-        end_angle = math.radians(-45)
-        pygame.draw.arc(screen, self._muted_color, rect, end_angle, start_angle, 3)
-
-        # Normalize around 0 (deceleration to the left, acceleration to the right).
-        max_abs = max(5.0, float(self.max_speed) * 1.5)
-        value = max(-max_abs, min(max_abs, float(self.acceleration)))
-        normalized = value / max_abs  # [-1, 1]
-        t = (normalized + 1.0) / 2.0  # [0, 1]
-        needle_angle = start_angle - t * (start_angle - end_angle)
-        nx = cx + int((radius - 7) * math.cos(needle_angle))
-        ny = cy - int((radius - 7) * math.sin(needle_angle))
-        needle_color = self._warn_color if value < 0 else self._accent_color
-        pygame.draw.line(screen, needle_color, center, (nx, ny), 3)
-        pygame.draw.circle(screen, self._text_color, center, 3)
-
-        label = self.font.render("ACC", True, self._muted_color)
-        screen.blit(label, label.get_rect(center=(cx, cy - 8)))
-        value_text = self.font.render(f"{value:+.0f}", True, self._text_color)
-        screen.blit(value_text, value_text.get_rect(center=(cx, cy + 10)))
-
-    def _draw_gesture_icons(
-        self,
-        screen: pygame.Surface,
-        top_left: tuple[int, int],
-        max_width: Optional[int] = None,
-    ) -> None:
-        x, y = top_left
-        size = 46
-        gap = 10
-        icon_count = 4
-        if max_width is not None and max_width > 0:
-            while (
-                size > 28 and (size * icon_count + gap * (icon_count - 1)) > max_width
-            ):
-                size -= 2
-                gap = max(6, gap - 1)
-
-        # Brake / Stop icon.
-        if self.is_braking:
-            self._draw_stop_sign(screen, (x, y), size)
-        else:
-            self._draw_throttle_icon(screen, (x, y), size)
-
-        # Steering direction icon.
-        steer_x = x + size + gap
-        if self.steer < -0.6:
-            self._draw_arrow_icon(screen, (steer_x, y), size, direction="left")
-        elif self.steer > 0.6:
-            self._draw_arrow_icon(screen, (steer_x, y), size, direction="right")
-        else:
-            self._draw_arrow_icon(screen, (steer_x, y), size, direction="center")
-
-        # Shift gesture status icons: L1 (downshift), R1 (upshift).
-        shift_down_x = steer_x + size + gap
-        shift_up_x = shift_down_x + size + gap
-        self._draw_shift_icon(
-            screen,
-            (shift_down_x, y),
-            size,
-            label="L1-",
-            active=self.left_shift_active,
-        )
-        self._draw_shift_icon(
-            screen,
-            (shift_up_x, y),
-            size,
-            label="R1+",
-            active=self.right_shift_active,
-        )
-
-    def _draw_shift_icon(
-        self,
-        screen: pygame.Surface,
-        top_left: tuple[int, int],
-        size: int,
-        label: str,
-        active: bool,
-    ) -> None:
-        x, y = top_left
-        rect = pygame.Rect(x, y, size, size)
-        border_color = self._accent_color if active else self._muted_color
-        fill_color = (30, 60, 80) if active else (20, 20, 20)
-        pygame.draw.rect(screen, fill_color, rect)
-        pygame.draw.rect(screen, border_color, rect, 2)
-        text = self.font.render(label, True, self._text_color)
-        screen.blit(text, text.get_rect(center=rect.center))
-
-    def _draw_stop_sign(
-        self, screen: pygame.Surface, top_left: tuple[int, int], size: int
-    ) -> None:
-        x, y = top_left
-        cx = x + size // 2
-        cy = y + size // 2
-        r = size // 2
-        points = []
-        for i in range(8):
-            angle = math.radians(22.5 + i * 45)
-            px = cx + int(r * math.cos(angle))
-            py = cy + int(r * math.sin(angle))
-            points.append((px, py))
-        pygame.draw.polygon(screen, self._warn_color, points)
-        pygame.draw.polygon(screen, self._text_color, points, 2)
-        label = self.font.render("STOP", True, self._text_color)
-        screen.blit(label, label.get_rect(center=(cx, cy)))
-
-    def _draw_throttle_icon(
-        self, screen: pygame.Surface, top_left: tuple[int, int], size: int
-    ) -> None:
-        x, y = top_left
-        rect = pygame.Rect(x, y, size, size)
-        pygame.draw.rect(screen, (20, 20, 20), rect)
-        pygame.draw.rect(screen, self._accent_color, rect, 2)
-        # Simple "pedal" bar.
-        inner = pygame.Rect(x + size // 3, y + size // 5, size // 3, int(size * 0.6))
-        pygame.draw.rect(screen, self._accent_color, inner)
-
-    def _draw_arrow_icon(
-        self,
-        screen: pygame.Surface,
-        top_left: tuple[int, int],
-        size: int,
-        direction: str,
-    ) -> None:
-        x, y = top_left
-        rect = pygame.Rect(x, y, size, size)
-        pygame.draw.rect(screen, (20, 20, 20), rect)
-        pygame.draw.rect(screen, self._accent_color, rect, 2)
-
-        cx = x + size // 2
-        cy = y + size // 2
-        color = self._accent_color
-        if direction == "left":
-            pts = [(cx - 14, cy), (cx + 10, cy - 12), (cx + 10, cy + 12)]
-            pygame.draw.polygon(screen, color, pts)
-        elif direction == "right":
-            pts = [(cx + 14, cy), (cx - 10, cy - 12), (cx - 10, cy + 12)]
-            pygame.draw.polygon(screen, color, pts)
-        else:
-            pygame.draw.circle(screen, self._muted_color, (cx, cy), 6)
 
     def _draw_camera_preview(
         self,
@@ -471,7 +444,7 @@ class PlayerHUD:
         pygame.draw.rect(screen, self._accent_color, border, 2)
 
         if self._camera_frame is None:
-            label = self.font.render("Camera…", True, self._muted_color)
+            label = self.font.render("Camera", True, self._muted_color)
             screen.blit(label, (x + 8, y + 8))
             return
 
@@ -485,7 +458,6 @@ class PlayerHUD:
         except cv2.error:
             return
 
-        # Convert numpy array (H, W, 3) into a pygame surface.
         surf = pygame.surfarray.make_surface(frame_rgb.swapaxes(0, 1))
         surf = pygame.transform.smoothscale(surf, (w, h))
         screen.blit(surf, (x, y))
