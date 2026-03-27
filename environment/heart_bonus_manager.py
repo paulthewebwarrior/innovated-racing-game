@@ -46,8 +46,8 @@ class HeartBonusManager:
         self.hearts = pygame.sprite.Group()
         self.timer = 0
         self._heart_image = self._load_heart_image()
-        self.heart_width = 35
-        self.heart_height = 35
+        self.heart_width = 40
+        self.heart_height = 40
         if self._heart_image:
             img_w, img_h = self._heart_image.get_size()
             scale = min(self.heart_width / img_w, self.heart_height / img_h)

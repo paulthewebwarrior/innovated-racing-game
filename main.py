@@ -492,7 +492,7 @@ def main():
         delta_time = now - last_frame_time
         last_frame_time = now
 
-        if game_state == "playing":
+        if game_state == "playing" and not is_breaking and not settings.visible:
             scoring_status = scoring_system.update(
                 current_speed=player_car.current_speed,
                 max_speed=max_speed,
