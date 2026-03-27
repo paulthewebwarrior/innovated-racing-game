@@ -5,12 +5,13 @@ import pygame
 from models.question import Question
 
 
-def draw_last_chance_overlay(
+def draw_question_overlay(
     screen: pygame.Surface,
     title_font: pygame.font.Font,
     body_font: pygame.font.Font,
     question: Question,
     selected_option: int = 0,
+    is_heart_question: bool = False,
 ) -> None:
     overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 180))
@@ -24,9 +25,22 @@ def draw_last_chance_overlay(
         panel_h,
     )
     pygame.draw.rect(screen, (20, 20, 20), panel, border_radius=12)
-    pygame.draw.rect(screen, (255, 200, 0), panel, width=3, border_radius=12)
 
-    title = title_font.render("LAST CHANCE!", True, (255, 220, 120))
+    if is_heart_question:
+        border_color = (255, 100, 150)
+        title = title_font.render("LIFE UP!", True, (255, 150, 180))
+        subtitle = body_font.render(
+            "Answer correctly to gain 1 life!", True, (255, 200, 220)
+        )
+    else:
+        border_color = (255, 200, 0)
+        title = title_font.render("LAST CHANCE!", True, (255, 220, 120))
+        subtitle = body_font.render(
+            "Answer correctly to survive!", True, (255, 200, 150)
+        )
+
+    pygame.draw.rect(screen, border_color, panel, width=3, border_radius=12)
+
     prompt = body_font.render(question.prompt, True, (255, 255, 255))
     key_range = ", ".join(str(i) for i in range(1, question.answer_count + 1))
     hint = body_font.render(
@@ -36,9 +50,10 @@ def draw_last_chance_overlay(
     )
 
     screen.blit(title, (panel.centerx - title.get_width() // 2, panel.y + 24))
-    screen.blit(prompt, (panel.centerx - prompt.get_width() // 2, panel.y + 92))
+    screen.blit(subtitle, (panel.centerx - subtitle.get_width() // 2, panel.y + 60))
+    screen.blit(prompt, (panel.centerx - prompt.get_width() // 2, panel.y + 105))
 
-    option_y = panel.y + 150
+    option_y = panel.y + 160
     for index, option in enumerate(question.options, start=1):
         is_selected = (index - 1) == selected_option
         option_color = (255, 255, 100) if is_selected else (240, 240, 240)
@@ -48,6 +63,18 @@ def draw_last_chance_overlay(
         option_y += 42
 
     screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 52))
+
+
+def draw_last_chance_overlay(
+    screen: pygame.Surface,
+    title_font: pygame.font.Font,
+    body_font: pygame.font.Font,
+    question: Question,
+    selected_option: int = 0,
+) -> None:
+    draw_question_overlay(
+        screen, title_font, body_font, question, selected_option, False
+    )
 
 
 def draw_game_over_overlay(
@@ -75,5 +102,9 @@ def draw_game_over_overlay(
     retry_text = body_font.render("Press R to restart", True, (200, 200, 200))
 
     screen.blit(title, (panel.centerx - title.get_width() // 2, panel.y + 34))
-    screen.blit(score_text, (panel.centerx - score_text.get_width() // 2, panel.y + 128))
-    screen.blit(retry_text, (panel.centerx - retry_text.get_width() // 2, panel.y + 188))
+    screen.blit(
+        score_text, (panel.centerx - score_text.get_width() // 2, panel.y + 128)
+    )
+    screen.blit(
+        retry_text, (panel.centerx - retry_text.get_width() // 2, panel.y + 188)
+    )

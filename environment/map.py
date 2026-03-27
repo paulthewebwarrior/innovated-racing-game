@@ -4,6 +4,7 @@ import pygame
 from environment.br_manager import BRManager
 from environment.crack_manager import CrackManager
 from environment.oil_spill_manager import OilSpillManager
+from environment.heart_bonus_manager import HeartBonusManager
 from models.road import Road
 from environment.obstacle_manager import ObstacleManager
 
@@ -30,10 +31,17 @@ class Map:
         self.crack_manager = CrackManager(self.road)
         self.br_manager = BRManager(self.road)
         self.oil_spill_manager = OilSpillManager(self.road)
+        self.heart_bonus_manager = HeartBonusManager(
+            self.road, spawn_frequency=900, max_hearts=1
+        )
         self.obstacle_manager.set_blocking_groups([self.br_manager.brs])
         self.br_manager.set_blocking_groups([self.obstacle_manager.obstacles])
         self.oil_spill_manager.set_blocking_groups(
-            [self.obstacle_manager.obstacles, self.br_manager.brs, self.crack_manager.cracks]
+            [
+                self.obstacle_manager.obstacles,
+                self.br_manager.brs,
+                self.crack_manager.cracks,
+            ]
         )
 
     @property
@@ -84,6 +92,11 @@ class Map:
         """Expose oil spill hazard sprites for collision checks."""
         return self.oil_spill_manager.oil_spills
 
+    @property
+    def hearts(self) -> pygame.sprite.Group:
+        """Expose heart bonus sprites for collision checks."""
+        return self.heart_bonus_manager.hearts
+
     def set_lane_count(self, lane_count: int) -> None:
         """
         Apply a new runtime lane count to the road model.
@@ -125,6 +138,7 @@ class Map:
         self.br_manager.update(effective_speed)
         self.oil_spill_manager.update(effective_speed)
         self.obstacle_manager.update(effective_speed)
+        self.heart_bonus_manager.update(int(effective_speed))
 
     def draw(self, surface: pygame.Surface) -> None:
         """
@@ -141,6 +155,7 @@ class Map:
         self.br_manager.draw(surface)
         self.oil_spill_manager.draw(surface)
         self.obstacle_manager.draw(surface)
+        self.heart_bonus_manager.draw(surface)
         self.road.draw_borders(surface)
 
     def clear_hazards(self) -> None:
@@ -149,6 +164,7 @@ class Map:
         self.cracks.empty()
         self.brs.empty()
         self.oil_spills.empty()
+        self.heart_bonus_manager.clear()
 
     def get_road_borders(self) -> tuple[int, int]:
         """

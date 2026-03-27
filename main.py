@@ -18,7 +18,7 @@ from models.question import Question
 from models.score import Score, ScoringSystem
 from settings import Settings
 from ui.hud import PlayerHUD
-from ui.overlays import draw_game_over_overlay, draw_last_chance_overlay
+from ui.overlays import draw_game_over_overlay, draw_question_overlay
 
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
@@ -100,6 +100,7 @@ def main():
     max_speed = player_car.max_speed
     target_steer = 0.0
     question_input_unlock_at = 0
+    heart_question_active = False
     question_manager = QuestionManager()
 
     hud = PlayerHUD(player_car, detector, font)
@@ -157,8 +158,19 @@ def main():
 
     def trigger_last_chance_question() -> None:
         nonlocal game_state, active_question, selected_option
-        nonlocal question_input_unlock_at
+        nonlocal question_input_unlock_at, heart_question_active
         game_state = "question"
+        heart_question_active = False
+        active_question = question_manager.get_random_question()
+        selected_option = 0
+        question_input_unlock_at = pygame.time.get_ticks() + 700
+        settings.visible = False
+
+    def trigger_heart_question() -> None:
+        nonlocal game_state, active_question, selected_option
+        nonlocal question_input_unlock_at, heart_question_active
+        game_state = "question"
+        heart_question_active = True
         active_question = question_manager.get_random_question()
         selected_option = 0
         question_input_unlock_at = pygame.time.get_ticks() + 700
@@ -170,15 +182,24 @@ def main():
             game_state, \
             active_question, \
             selected_option, \
-            question_input_unlock_at
+            question_input_unlock_at, \
+            heart_question_active
         if active_question is None:
             return
 
         if question_manager.validate_answer(active_question, answer_index):
-            lives = 1.0
+            if heart_question_active:
+                lives = min(3.0, lives + 1.0)
+                heart_question_active = False
+            else:
+                lives = 1.0
             game_state = "playing"
         else:
-            game_state = "game_over"
+            if heart_question_active:
+                heart_question_active = False
+                game_state = "playing"
+            else:
+                game_state = "game_over"
 
         active_question = None
         selected_option = 0
@@ -396,6 +417,17 @@ def main():
                     now + config.OIL_SWERVE_DURATION_MS,
                 )
 
+            heart_hits = pygame.sprite.spritecollide(
+                player_car,
+                game_map.hearts,
+                True,
+                collided=pygame.sprite.collide_mask,
+            )
+            if heart_hits and lives < 3:
+                trigger_heart_question()
+            elif heart_hits and lives >= 3:
+                scoring_system.add_score(50)
+
             if br_hits:
                 player_car.current_speed = 0
                 player_car.velocity_x = 0
@@ -436,12 +468,13 @@ def main():
             )
 
         if game_state == "question" and active_question is not None:
-            draw_last_chance_overlay(
+            draw_question_overlay(
                 screen,
                 overlay_title_font,
                 overlay_body_font,
                 active_question,
                 selected_option,
+                heart_question_active,
             )
         elif game_state == "game_over":
             draw_game_over_overlay(
