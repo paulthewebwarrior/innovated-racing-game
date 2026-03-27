@@ -139,8 +139,11 @@ HAND_CONNECTIONS = (
 )
 
 SCORING_CONFIG = {
-    "base_points_per_second": 0.1,
-    "top_speed_bonus_pts": 0,
-    "clean_drive_bonus_pts": 0,
-    "clean_drive_interval_ms": 40000,
+    "base_points_per_second": 3.0,
+    "top_speed_bonus": 0,
+    "accel_bonus": 0,
+    "clean_drive_bonus": 0,
+    "clean_drive_interval": 40000,
+    "near_miss_bonus": 0,
+    "sharp_turn_bonus": 0,
 }
