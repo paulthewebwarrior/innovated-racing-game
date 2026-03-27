@@ -13,11 +13,11 @@ class ObstacleManager:
     """Spawn, update, and render road obstacles."""
 
     def __init__(
-            self,
-            road: Road,
-            spawn_frequency: int = 60,
-            max_obstacles: int = 3,
-            obstacle_size: tuple[int, int] = (30, 30),
+        self,
+        road: Road,
+        spawn_frequency: int = 60,
+        max_obstacles: int = 3,
+        obstacle_size: tuple[int, int] = (30, 30),
     ):
         """
         Initialize obstacle spawning limits and sprite storage.
@@ -49,7 +49,10 @@ class ObstacleManager:
             return []
 
         models: list[pygame.Surface] = []
+        exclude_names = {"full hp.png", "hp minus 1.png", "hp minus 2.png", "deds.png"}
         for model_path in sorted(self.model_dir.glob("*.png")):
+            if model_path.name in exclude_names:
+                continue
             try:
                 image = pygame.image.load(str(model_path))
                 if pygame.display.get_surface() is not None:
@@ -165,9 +168,9 @@ class ObstacleManager:
             for obs in self.obstacles:
                 # Check if obs is in the same lane (by x overlap)
                 if (
-                        obs.rect.left < spawn_x + obstacle_width
-                        and obs.rect.right > spawn_x
-                        and abs(obs.rect.y - spawn_y) < obstacle_height * 3
+                    obs.rect.left < spawn_x + obstacle_width
+                    and obs.rect.right > spawn_x
+                    and abs(obs.rect.y - spawn_y) < obstacle_height * 3
                 ):
                     overlap = True
                     break
@@ -179,8 +182,8 @@ class ObstacleManager:
                 for group in self.blocking_groups:
                     for blocked_sprite in group:
                         if (
-                                spawn_rect.left < blocked_sprite.rect.right
-                                and spawn_rect.right > blocked_sprite.rect.left
+                            spawn_rect.left < blocked_sprite.rect.right
+                            and spawn_rect.right > blocked_sprite.rect.left
                         ):
                             overlap = True
                             break

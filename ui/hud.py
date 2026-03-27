@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Optional
 import math
 
@@ -69,6 +70,28 @@ class PlayerHUD:
         self._lives_surf: Optional[pygame.Surface] = None
         self._last_lives: Optional[float] = None
         self._needs_panel_update = True
+
+        self._load_lives_images()
+
+    def _load_lives_images(self) -> None:
+        self._lives_images = {}
+        base_path = os.path.join("resources", "models")
+        image_files = {
+            3: "full hp.png",
+            2: "hp minus 1.png",
+            1: "hp minus 2.png",
+            0: "deds.png",
+        }
+        for lives, filename in image_files.items():
+            filepath = os.path.join(base_path, filename)
+            if os.path.exists(filepath):
+                try:
+                    img = pygame.image.load(filepath).convert_alpha()
+                    self._lives_images[lives] = img
+                except pygame.error:
+                    self._lives_images[lives] = None
+            else:
+                self._lives_images[lives] = None
 
     def update_from_game(
         self,
@@ -386,39 +409,27 @@ class PlayerHUD:
         if self.lives is None:
             return
 
-        if self._lives_surf is None or self._last_lives != self.lives:
-            self._last_lives = self.lives
-            max_hearts = max(1, int(config.MAX_HEARTS), int(config.STARTING_LIVES))
-            clamped_lives = max(0.0, min(float(max_hearts), float(self.lives)))
-            full_hearts = int(clamped_lives)
-            has_half = (clamped_lives - full_hearts) >= 0.5
-            empty_hearts = max_hearts - full_hearts - (1 if has_half else 0)
+        clamped_lives = max(0.0, min(3.0, float(self.lives)))
+        lives_count = int(clamped_lives)
 
-            heart_size = 24
-            spacing = 4
-            surf_w = max_hearts * heart_size + (max_hearts - 1) * spacing
-            surf_h = self.font_small.get_height() + 5 + heart_size + 10
+        if self._lives_surf is None or self._last_lives != lives_count:
+            self._last_lives = lives_count
 
-            self._lives_surf = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
-            self._lives_surf.fill((0, 0, 0, 0))
-
-            label = self.font_small.render("LIVES", True, self._muted_color)
-            self._lives_surf.blit(label, (0, 0))
-
-            for i in range(full_hearts):
-                char_surf = self.font_medium.render("●", True, self._warn_color)
-                self._lives_surf.blit(char_surf, (i * (heart_size + spacing), 18))
-            if has_half:
-                char_surf = self.font_medium.render("◐", True, self._warn_color)
-                self._lives_surf.blit(
-                    char_surf, (full_hearts * (heart_size + spacing), 18)
+            img = self._lives_images.get(lives_count)
+            if img is not None:
+                img_w, img_h = img.get_size()
+                self._lives_surf = pygame.Surface((img_w, img_h), pygame.SRCALPHA)
+                self._lives_surf.fill((0, 0, 0, 0))
+                self._lives_surf.blit(img, (0, 0))
+            else:
+                surf_w = 120
+                surf_h = 40
+                self._lives_surf = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+                self._lives_surf.fill((0, 0, 0, 0))
+                label = self.font_medium.render(
+                    f"HP: {lives_count}/3", True, self._muted_color
                 )
-            for i in range(empty_hearts):
-                char_surf = self.font_medium.render("○", True, (60, 60, 70))
-                offset = (full_hearts + (1 if has_half else 0)) * (heart_size + spacing)
-                self._lives_surf.blit(
-                    char_surf, (offset + i * (heart_size + spacing), 18)
-                )
+                self._lives_surf.blit(label, (10, 10))
 
         screen.blit(self._lives_surf, (15, 15))
 
