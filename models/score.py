@@ -51,17 +51,11 @@ class ScoringSystem:
         self._update_difficulty(current_time)
         self._update_clean_drive(current_time, current_speed)
 
-        if not is_braking:
-            base_points = (
-                self.base_points_per_second
-                * (delta_time / 1000.0)
-                * speed_ratio
-                * self.difficulty_multiplier
-            )
+        if is_braking:
+            base_points = 0.0
         else:
             base_points = (
                 self.base_points_per_second
-                * 0.3
                 * (delta_time / 1000.0)
                 * speed_ratio
                 * self.difficulty_multiplier

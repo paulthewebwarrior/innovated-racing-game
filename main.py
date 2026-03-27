@@ -503,9 +503,11 @@ def main():
                 obstacles=list(game_map.obstacles) if game_map.obstacles else None,
             )
 
-        if player_car.max_speed <= 20:
-            speed_bonus = scoring_system.get_score() // settings.speed_bonus
-            player_car.set_max_speed(settings.car_speed + speed_bonus)
+        base_speed = 10.0
+        score = scoring_system.get_score()
+        speed_increments = score // 3000
+        new_max_speed = base_speed + (speed_increments * 0.5)
+        player_car.set_max_speed(new_max_speed)
 
         clock.tick(settings.max_fps)
 
