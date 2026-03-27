@@ -46,11 +46,18 @@ class HeartBonusManager:
         self.hearts = pygame.sprite.Group()
         self.timer = 0
         self._heart_image = self._load_heart_image()
-        self.heart_width = 40
-        self.heart_height = 40
+        self.heart_width = 35
+        self.heart_height = 35
         if self._heart_image:
-            self.heart_width = self._heart_image.get_width()
-            self.heart_height = self._heart_image.get_height()
+            img_w, img_h = self._heart_image.get_size()
+            scale = min(self.heart_width / img_w, self.heart_height / img_h)
+            new_w = max(1, int(img_w * scale))
+            new_h = max(1, int(img_h * scale))
+            self._heart_image = pygame.transform.smoothscale(
+                self._heart_image, (new_w, new_h)
+            )
+            self.heart_width = new_w
+            self.heart_height = new_h
 
     def _load_heart_image(self) -> pygame.Surface | None:
         filepath = os.path.join("resources", "models", "full hp.png")

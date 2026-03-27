@@ -155,6 +155,7 @@ def main():
         active_question = None
         selected_option = 0
         question_input_unlock_at = 0
+        hud.reset_hearts_collected()
 
     def trigger_last_chance_question() -> None:
         nonlocal game_state, active_question, selected_option
@@ -190,6 +191,7 @@ def main():
         if question_manager.validate_answer(active_question, answer_index):
             if heart_question_active:
                 lives = min(3.0, lives + 1.0)
+                hud.add_heart_collected()
                 heart_question_active = False
             else:
                 lives = 1.0

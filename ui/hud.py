@@ -70,6 +70,8 @@ class PlayerHUD:
         self._lives_surf: Optional[pygame.Surface] = None
         self._last_lives: Optional[float] = None
         self._needs_panel_update = True
+        self._hearts_collected: int = 0
+        self._heart_icon_surf: Optional[pygame.Surface] = None
 
         self._load_lives_images()
 
@@ -137,6 +139,14 @@ class PlayerHUD:
         self.combo = combo
         self.difficulty = difficulty
         self.distance = distance
+
+    def add_heart_collected(self) -> None:
+        self._hearts_collected += 1
+        self._heart_icon_surf = None
+
+    def reset_hearts_collected(self) -> None:
+        self._hearts_collected = 0
+        self._heart_icon_surf = None
 
     def _update_pulse(self, dt: float) -> None:
         self._bonus_pulse += dt * 3.0 * self._pulse_direction
@@ -432,6 +442,29 @@ class PlayerHUD:
                 self._lives_surf.blit(label, (10, 10))
 
         screen.blit(self._lives_surf, (15, 15))
+
+        if self._hearts_collected > 0:
+            heart_img = self._lives_images.get(3)
+            if heart_img is not None:
+                heart_size = 22
+                heart_w, heart_h = heart_img.get_size()
+                scaled_heart = pygame.transform.smoothscale(
+                    heart_img, (heart_size, heart_size)
+                )
+                start_x = 15
+                start_y = 15 + self._lives_surf.get_height() + 8
+                for i in range(self._hearts_collected):
+                    screen.blit(scaled_heart, (start_x + i * (heart_size + 4), start_y))
+                count_label = self.font_small.render(
+                    f"x{self._hearts_collected}", True, (255, 180, 200)
+                )
+                screen.blit(
+                    count_label,
+                    (
+                        start_x + self._hearts_collected * (heart_size + 4) + 2,
+                        start_y + 2,
+                    ),
+                )
 
     def _compute_gear(self, speed: float, max_speed: float) -> str:
         if speed <= 0.1:
