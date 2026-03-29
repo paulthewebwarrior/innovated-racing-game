@@ -16,26 +16,19 @@ import pygame.gfxdraw
 
 
 def draw_rounded_rect(surface, color, rect, radius, width=0):
-    x, y, w, h = rect
-    radius = min(radius, w // 2, h // 2)
-
     if width == 0:
         pygame.gfxdraw.box(surface, rect, color)
-
-    if width > 0:
+    else:
         pygame.gfxdraw.rectangle(
-            surface, (x + width // 2, y + width // 2, w - width, h - width), color
+            surface,
+            (
+                rect[0] + width // 2,
+                rect[1] + width // 2,
+                rect[2] - width,
+                rect[3] - width,
+            ),
+            color,
         )
-
-    corner_points = [
-        (x + radius, y + radius),
-        (x + w - radius, y + radius),
-        (x + radius, y + h - radius),
-        (x + w - radius, y + h - radius),
-    ]
-
-    for cx, cy in corner_points:
-        pygame.gfxdraw.circle(surface, cx, cy, radius, color)
 
 
 class Button:
