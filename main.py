@@ -19,6 +19,7 @@ from models.score import Score, ScoringSystem
 from settings import Settings
 from ui.hud import PlayerHUD
 from ui.overlays import draw_game_over_overlay, draw_question_overlay
+from ui.game_ui import HUDManager, PauseMenu, SettingsMenu
 
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
@@ -95,6 +96,7 @@ def main():
     scoring_system = ScoringSystem(SCORING_CONFIG)
     lives = float(max(1, int(config.STARTING_LIVES)))
     game_state = "playing"
+    pause_state = False
     active_question: Question | None = None
     selected_option = 0
     max_speed = player_car.max_speed
@@ -104,6 +106,11 @@ def main():
     question_manager = QuestionManager()
 
     hud = PlayerHUD(player_car, detector, font)
+    game_hud = HUDManager(
+        screen_width=WINDOW_SIZE["width"], screen_height=WINDOW_SIZE["height"]
+    )
+    pause_menu = PauseMenu()
+    settings_menu = SettingsMenu()
     overlay_title_font = pygame.font.Font(None, max(40, config.FONT_SIZE * 2))
     overlay_body_font = pygame.font.Font(None, max(30, config.FONT_SIZE + 10))
 
@@ -125,7 +132,7 @@ def main():
             oil_swerve_until, \
             oil_swerve_started_at, \
             oil_swerve_phase
-        nonlocal game_state, active_question, selected_option
+        nonlocal game_state, pause_state, active_question, selected_option
         nonlocal question_input_unlock_at
         nonlocal last_frame_time
 
@@ -152,6 +159,8 @@ def main():
         last_frame_time = pygame.time.get_ticks()
         settings.visible = False
         game_state = "playing"
+        pause_state = False
+        pause_menu.hide()
         active_question = None
         selected_option = 0
         question_input_unlock_at = 0
@@ -231,7 +240,11 @@ def main():
                 running = False
                 continue
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                running = False
+                if game_state == "playing" and not settings.visible:
+                    if not pause_menu.visible:
+                        pause_menu.show()
+                    else:
+                        pause_menu.hide()
                 continue
 
             if game_state == "question":
@@ -258,6 +271,13 @@ def main():
             )
             settings.visible = show_settings
 
+            if settings.visible:
+                mouse_pos = pygame.mouse.get_pos()
+                for event in pygame.event.get([pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN]):
+                    result = settings_menu.handle_input(event, mouse_pos)
+                    if result and result.get("action") == "close":
+                        settings.visible = False
+
         if game_state == "question" and active_question is not None:
             now = pygame.time.get_ticks()
             question_input_ready = now >= question_input_unlock_at
@@ -272,16 +292,38 @@ def main():
             if question_input_ready and detector.consume_question_select_request():
                 resolve_question_answer(selected_option)
 
+        if pause_menu.visible:
+            mouse_pos = pygame.mouse.get_pos()
+            mouse_pressed = pygame.mouse.get_pressed()
+
+            for event in pygame.event.get([pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN]):
+                result = pause_menu.handle_input(event)
+                if result == "Resume":
+                    pause_menu.hide()
+                elif result == "Restart":
+                    reset_run_state()
+                    pause_menu.hide()
+                elif result == "Settings":
+                    pause_menu.hide()
+                    settings.visible = True
+                elif result == "Quit":
+                    running = False
+
+            pause_menu.update(mouse_pos, mouse_pressed)
+
+            delta_time = 16
+            pause_menu.draw(screen, delta_time / 1000.0)
+            pygame.display.flip()
+            continue
+
         if game_state == "playing" and not settings.visible:
             detector.brake_threshold = settings.get_brake_threshold()
 
             frame = detector.get_frame()
+            cv2.waitKey(1)
             if settings.show_camera and frame is not None:
-                cv2.imshow("Hand Tracker (Press 'P' for Settings)", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    pass
-            elif not settings.show_camera:
-                pass
+                game_hud.set_camera_frame(frame)
+            game_hud.set_camera_visibility(settings.show_camera)
 
             # --- BOOST FEATURE ---
             now = pygame.time.get_ticks()
@@ -454,20 +496,23 @@ def main():
             difficulty=scoring_system.get_difficulty(),
             distance=scoring_system.get_distance(),
         )
-        hud.draw(screen)
-
-        obs_text = font.render(
-            f"Obs Freq: {settings.obstacle_frequency}", True, (200, 200, 200)
+        game_hud.update(
+            speed=player_car.current_speed,
+            max_speed=max_speed,
+            score=scoring_system.get_score(),
+            lives=int(lives),
+            distance=scoring_system.get_distance(),
+            gear=current_gear,
+            is_braking=is_breaking,
+            boost_energy=100.0,
+            hearts_collected=hud._hearts_collected
+            if hasattr(hud, "_hearts_collected")
+            else 0,
         )
-        obs_y = hud.position[1] + hud.size[1] + 10
-        screen.blit(obs_text, (10, obs_y))
-        lane_text = font.render(f"Lanes: {settings.lane_count}", True, (200, 200, 200))
-        screen.blit(lane_text, (10, obs_y + font.get_linesize()))
+        game_hud.draw(screen)
 
         if settings.visible:
-            settings.draw_settings_menu(
-                screen, font, settings, selected_setting, config.SETTING_OPTIONS
-            )
+            settings_menu.draw(screen)
 
         if game_state == "question" and active_question is not None:
             draw_question_overlay(
