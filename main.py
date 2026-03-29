@@ -262,6 +262,15 @@ def main():
                     reset_run_state()
                 continue
 
+            if settings.visible:
+                mouse_pos = pygame.mouse.get_pos()
+                result = settings_menu.handle_input(event, mouse_pos)
+                if result and result.get("action") in ("changed", "close"):
+                    settings_menu.apply_to_game(settings)
+                if result and result.get("action") == "close":
+                    settings.visible = False
+                continue
+
             running, selected_setting, show_settings = settings.handle_event(
                 event,
                 running,
@@ -270,13 +279,6 @@ def main():
                 settings.visible,
             )
             settings.visible = show_settings
-
-            if settings.visible:
-                mouse_pos = pygame.mouse.get_pos()
-                for event in pygame.event.get([pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN]):
-                    result = settings_menu.handle_input(event, mouse_pos)
-                    if result and result.get("action") == "close":
-                        settings.visible = False
 
         if game_state == "question" and active_question is not None:
             now = pygame.time.get_ticks()
@@ -310,6 +312,18 @@ def main():
                     running = False
 
             pause_menu.update(mouse_pos, mouse_pressed)
+            result = pause_menu._clicked_option
+            pause_menu._clicked_option = None
+            if result == "Resume":
+                pause_menu.hide()
+            elif result == "Restart":
+                reset_run_state()
+                pause_menu.hide()
+            elif result == "Settings":
+                pause_menu.hide()
+                settings.visible = True
+            elif result == "Quit":
+                running = False
 
             delta_time = 16
             pause_menu.draw(screen, delta_time / 1000.0)
@@ -512,6 +526,7 @@ def main():
         game_hud.draw(screen)
 
         if settings.visible:
+            settings_menu.update(pygame.mouse.get_pos())
             settings_menu.draw(screen)
 
         if game_state == "question" and active_question is not None:

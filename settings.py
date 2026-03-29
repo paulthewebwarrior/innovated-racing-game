@@ -299,10 +299,6 @@ class Settings:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 running = False
-            elif event.key == pygame.K_p:
-                show_settings = not show_settings
-                if not show_settings and not self.show_camera:
-                    cv2.destroyAllWindows()
 
             if show_settings:
                 if event.key == pygame.K_UP:

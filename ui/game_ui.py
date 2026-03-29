@@ -12,6 +12,30 @@ from typing import Optional, Callable
 import cv2
 import numpy as np
 import pygame
+import pygame.gfxdraw
+
+
+def draw_rounded_rect(surface, color, rect, radius, width=0):
+    x, y, w, h = rect
+    radius = min(radius, w // 2, h // 2)
+
+    if width == 0:
+        pygame.gfxdraw.box(surface, rect, color)
+
+    if width > 0:
+        pygame.gfxdraw.rectangle(
+            surface, (x + width // 2, y + width // 2, w - width, h - width), color
+        )
+
+    corner_points = [
+        (x + radius, y + radius),
+        (x + w - radius, y + radius),
+        (x + radius, y + h - radius),
+        (x + w - radius, y + h - radius),
+    ]
+
+    for cx, cy in corner_points:
+        pygame.gfxdraw.circle(surface, cx, cy, radius, color)
 
 
 class Button:
@@ -45,8 +69,8 @@ class Button:
     def draw(self, surface: pygame.Surface) -> None:
         color = self.hover_color if self.is_hovered else self.bg_color
 
-        pygame.draw.rect(surface, color, self.rect, border_radius=8)
-        pygame.draw.rect(surface, self.border_color, self.rect, 2, border_radius=8)
+        draw_rounded_rect(surface, color, self.rect, 8)
+        draw_rounded_rect(surface, self.border_color, self.rect, 8, 2)
 
         text_surf = self.font.render(self.text, True, self.text_color)
         text_rect = text_surf.get_rect(center=self.rect.center)
@@ -97,12 +121,12 @@ class Slider:
             self.value = self.min_val + pct * (self.max_val - self.min_val)
 
     def draw(self, surface: pygame.Surface) -> None:
-        pygame.draw.rect(surface, self.track_color, self.track_rect, border_radius=3)
+        draw_rounded_rect(surface, self.track_color, self.track_rect, 3)
 
         pct = (self.value - self.min_val) / (self.max_val - self.min_val)
         fill_width = int(self.width * pct)
         fill_rect = pygame.Rect(self.x, self.y + self.height // 2 - 3, fill_width, 6)
-        pygame.draw.rect(surface, self.accent_color, fill_rect, border_radius=3)
+        draw_rounded_rect(surface, self.accent_color, fill_rect, 3)
 
         thumb_x = self.x + fill_width
         thumb_y = self.y + self.height // 2
@@ -220,11 +244,17 @@ class HUDManager:
             self._draw_camera_preview(screen, sw, sh)
 
     def _draw_glass_panel(
-        self, surface: pygame.Surface, x: int, y: int, w: int, h: int
+        self,
+        surface: pygame.Surface,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        border: bool = True,
     ) -> None:
-        panel = pygame.Surface((w, h), pygame.SRCALPHA)
-        panel.fill((15, 20, 35, 200))
-        surface.blit(panel, (x, y))
+        draw_rounded_rect(surface, (15, 20, 35, 200), (x, y, w, h), 12)
+        if border:
+            draw_rounded_rect(surface, self.accent_color, (x, y, w, h), 12, 1)
 
     def _draw_speed_top_center(self, screen: pygame.Surface, sw: int) -> None:
         w, h = 180, 80
@@ -232,7 +262,7 @@ class HUDManager:
         y = 20
 
         self._draw_glass_panel(screen, x, y, w, h)
-        pygame.draw.rect(screen, self.accent_color, (x, y, w, 3), border_radius=3)
+        draw_rounded_rect(screen, self.accent_color, (x, y, w, 3), 8)
 
         speed = int(self._speed_display)
         color = self.warn_color if self.is_braking else self.text_color
@@ -309,6 +339,9 @@ class HUDManager:
         bg = pygame.Surface((bar_w, bar_h), pygame.SRCALPHA)
         bg.fill((15, 20, 35, 180))
         screen.blit(bg, (x, y))
+        pygame.draw.rect(
+            screen, self.accent_color, (x, y, bar_w, bar_h), 1, border_radius=8
+        )
 
         pct = self.boost_energy / 100.0
         fill_w = int((bar_w - 4) * pct)
@@ -322,7 +355,7 @@ class HUDManager:
 
         if fill_w > 0:
             fill_rect = pygame.Rect(x + 2, y + 2, fill_w, bar_h - 4)
-            pygame.draw.rect(screen, fill_color, fill_rect, border_radius=4)
+            draw_rounded_rect(screen, fill_color, fill_rect, 4)
 
         label = self.font_small.render("BOOST", True, self.muted_color)
         screen.blit(label, (sw // 2 - label.get_width() // 2, y - 18))
@@ -339,7 +372,6 @@ class HUDManager:
             frame = cv2.resize(frame, (w, h))
             frame = np.rot90(frame)
             frame = np.flipud(frame)
-            frame = np.transpose(frame, (1, 0, 2))
             frame_surface = pygame.surfarray.make_surface(frame)
 
             panel = pygame.Surface((w + 8, h + 8), pygame.SRCALPHA)
@@ -364,6 +396,7 @@ class PauseMenu:
 
         self.options = ["Resume", "Restart", "Settings", "Quit"]
         self.buttons: list[Button] = []
+        self._clicked_option = None
 
         self.visible = False
         self.anim_progress = 0.0
@@ -416,17 +449,27 @@ class PauseMenu:
             elif event.key == pygame.K_RETURN:
                 idx = getattr(self, "selected_index", 0)
                 return self.options[idx]
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            for btn in self.buttons:
+                if btn.rect.collidepoint(event.pos):
+                    return btn.text
+
         return None
 
     def update(self, mouse_pos: tuple, mouse_pressed: tuple) -> None:
         if not self.visible:
             return
-        for btn in self.buttons:
-            btn.update(mouse_pos, mouse_pressed)
 
-        idx = getattr(self, "selected_index", 0)
-        for i, btn in enumerate(self.buttons):
-            btn.is_hovered = i == idx
+        clicked = None
+        for btn in self.buttons:
+            was_hovered = btn.is_hovered
+            btn.update(mouse_pos, mouse_pressed)
+            if mouse_pressed[0] and btn.is_hovered and not was_hovered:
+                clicked = btn.text
+
+        if clicked:
+            self._clicked_option = clicked
 
     def draw(self, screen: pygame.Surface, dt: float = 0.016) -> None:
         if not self.visible:
@@ -444,20 +487,20 @@ class PauseMenu:
         menu_x = sw // 2 - menu_w // 2
         menu_y = sh // 2 - menu_h // 2
 
-        panel = pygame.Surface((menu_w, menu_h), pygame.SRCALPHA)
-        panel.fill((20, 30, 50, 240))
-        screen.blit(panel, (menu_x, menu_y))
-
-        pygame.draw.rect(screen, self.accent_color, (menu_x, menu_y, menu_w, 4))
+        draw_rounded_rect(
+            screen, (20, 30, 50, 240), (menu_x, menu_y, menu_w, menu_h), 12
+        )
+        draw_rounded_rect(screen, self.accent_color, (menu_x, menu_y, menu_w, 4), 12)
+        draw_rounded_rect(
+            screen, self.accent_color, (menu_x, menu_y, menu_w, menu_h), 12, 1
+        )
 
         title = self.font_title.render("PAUSED", True, self.accent_color)
         screen.blit(title, (sw // 2 - title.get_width() // 2, menu_y + 25))
 
         self.update_layout(sw, sh)
 
-        idx = getattr(self, "selected_index", 0)
-        for i, btn in enumerate(self.buttons):
-            btn.is_hovered = i == idx
+        for btn in self.buttons:
             btn.draw(screen)
 
         hint = self.font_hint.render(
@@ -499,6 +542,9 @@ class SettingsMenu:
         }
 
         self.sliders: dict[str, Slider] = {}
+        self._hovered_category = None
+        self._hovered_option = None
+        self._close_button = None
 
     def handle_input(
         self, event: pygame.event.Event, mouse_pos: tuple = None
@@ -522,7 +568,7 @@ class SettingsMenu:
                     self.categories
                 )
                 self.selected_option = 0
-            elif event.key in (pygame.K_ESCAPE, pygame.K_p):
+            elif event.key == pygame.K_ESCAPE:
                 return {"action": "close"}
 
         if event.type == pygame.MOUSEBUTTONDOWN and mouse_pos:
@@ -530,6 +576,10 @@ class SettingsMenu:
             panel_w, panel_h = 720, 520
             panel_x = sw // 2 - panel_w // 2
             panel_y = sh // 2 - panel_h // 2
+
+            close_btn = pygame.Rect(panel_x + panel_w - 50, panel_y + 15, 35, 35)
+            if close_btn.collidepoint(mouse_pos):
+                return {"action": "close"}
 
             sidebar_w = 160
             sidebar_x = panel_x + 20
@@ -575,6 +625,54 @@ class SettingsMenu:
 
         return None
 
+    def update(self, mouse_pos: tuple) -> None:
+        sw, sh = pygame.display.get_surface().get_size()
+        panel_w, panel_h = 720, 520
+        panel_x = sw // 2 - panel_w // 2
+        panel_y = sh // 2 - panel_h // 2
+
+        sidebar_w = 160
+        sidebar_x = panel_x + 20
+        sidebar_y = panel_y + 80
+
+        self._hovered_category = None
+        self._hovered_option = None
+
+        for i in range(len(self.categories)):
+            cat_rect = pygame.Rect(
+                sidebar_x + 5, sidebar_y + 25 + i * 60, sidebar_w - 10, 45
+            )
+            if cat_rect.collidepoint(mouse_pos):
+                self._hovered_category = i
+                return
+
+        cat = self.categories[self.selected_category]
+        opts = self.settings[cat]
+        content_x = panel_x + sidebar_w + 35
+        content_y = panel_y + 80
+
+        for i in range(len(opts)):
+            opt_y = content_y + 25 + i * 75
+            bar_rect = pygame.Rect(content_x, opt_y + 28, 350, 20)
+            if bar_rect.collidepoint(mouse_pos):
+                self._hovered_option = i
+                return
+
+            val = self.get_value(cat, opts[i][0])
+            if isinstance(val, bool):
+                toggle_rect = pygame.Rect(content_x + 280, opt_y, 50, 25)
+                if toggle_rect.collidepoint(mouse_pos):
+                    self._hovered_option = i
+                    return
+            elif isinstance(val, str):
+                left_rect = pygame.Rect(content_x + 200, opt_y, 30, 25)
+                right_rect = pygame.Rect(content_x + 320, opt_y, 30, 25)
+                if left_rect.collidepoint(mouse_pos) or right_rect.collidepoint(
+                    mouse_pos
+                ):
+                    self._hovered_option = i
+                    return
+
     def _adjust_value(self, category: str, option: str, delta: int) -> None:
         opts = self.settings[category]
         for i, opt in enumerate(opts):
@@ -598,6 +696,39 @@ class SettingsMenu:
                 return opt[1]
         return None
 
+    def apply_to_game(self, game_settings) -> None:
+        cat = self.categories[0]
+        opts = self.settings[cat]
+        for opt in opts:
+            if opt[0] == "Difficulty":
+                game_settings.difficulty = self.get_value(cat, "Difficulty")
+            elif opt[0] == "Traffic Density":
+                game_settings.obstacle_frequency = self.get_value(
+                    cat, "Traffic Density"
+                )
+            elif opt[0] == "Show FPS":
+                game_settings.show_fps = self.get_value(cat, "Show FPS")
+
+        cat = self.categories[1]
+        opts = self.settings[cat]
+        for opt in opts:
+            if opt[0] == "Fullscreen":
+                game_settings.fullscreen = self.get_value(cat, "Fullscreen")
+            elif opt[0] == "Show Camera":
+                game_settings.show_camera = self.get_value(cat, "Show Camera")
+            elif opt[0] == "VSync":
+                game_settings.vsync = self.get_value(cat, "VSync")
+
+        cat = self.categories[2]
+        opts = self.settings[cat]
+        for opt in opts:
+            if opt[0] == "Steering Sens":
+                game_settings.steering_sensitivity = self.get_value(
+                    cat, "Steering Sens"
+                )
+            elif opt[0] == "Brake Sens":
+                game_settings.brake_threshold = self.get_value(cat, "Brake Sens")
+
     def draw(self, screen: pygame.Surface) -> None:
         sw, sh = screen.get_width(), screen.get_height()
 
@@ -609,14 +740,22 @@ class SettingsMenu:
         panel_x = sw // 2 - panel_w // 2
         panel_y = sh // 2 - panel_h // 2
 
-        panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-        panel.fill((20, 30, 50, 245))
-        screen.blit(panel, (panel_x, panel_y))
-
-        pygame.draw.rect(screen, self.accent_color, (panel_x, panel_y, panel_w, 4))
+        draw_rounded_rect(
+            screen, (20, 30, 50, 245), (panel_x, panel_y, panel_w, panel_h), 12
+        )
+        draw_rounded_rect(screen, self.accent_color, (panel_x, panel_y, panel_w, 4), 12)
+        draw_rounded_rect(
+            screen, self.accent_color, (panel_x, panel_y, panel_w, panel_h), 12, 1
+        )
 
         title = self.font_title.render("SETTINGS", True, self.accent_color)
         screen.blit(title, (panel_x + 30, panel_y + 20))
+
+        close_btn = pygame.Rect(panel_x + panel_w - 50, panel_y + 15, 35, 35)
+        draw_rounded_rect(screen, (200, 80, 80), close_btn, 8)
+        close_x = self.font_title.render("X", True, (255, 255, 255))
+        screen.blit(close_x, (close_btn.x + 10, close_btn.y + 2))
+        self._close_button = close_btn
 
         sidebar_w = 160
         sidebar_x = panel_x + 20
@@ -630,13 +769,18 @@ class SettingsMenu:
         for i, cat in enumerate(self.categories):
             cat_y = sidebar_y + 25 + i * 60
             is_sel = i == self.selected_category
+            is_hover = i == self._hovered_category
 
-            bg_col = (0, 180, 255, 40) if is_sel else (0, 0, 0, 0)
+            bg_col = (
+                (0, 180, 255, 60)
+                if is_sel
+                else ((0, 180, 255, 30) if is_hover else (0, 0, 0, 0))
+            )
             sb2 = pygame.Surface((sidebar_w - 10, 45), pygame.SRCALPHA)
             sb2.fill(bg_col)
             screen.blit(sb2, (sidebar_x + 5, cat_y))
 
-            color = self.accent_color if is_sel else self.muted_color
+            color = self.accent_color if is_sel else self.text_color
             cat_text = self.font_option.render(cat, True, color)
             screen.blit(cat_text, (sidebar_x + 25, cat_y + 10))
 
@@ -650,6 +794,12 @@ class SettingsMenu:
         for i, opt in enumerate(opts):
             opt_y = content_y + 25 + i * 75
             is_sel = i == self.selected_option
+            is_hover = i == self._hovered_option
+
+            if is_hover or is_sel:
+                hover_bg = pygame.Surface((content_w - 20, 60), pygame.SRCALPHA)
+                hover_bg.fill((0, 180, 255, 20))
+                screen.blit(hover_bg, (content_x - 5, opt_y - 5))
 
             color = self.accent_color if is_sel else self.text_color
             label = self.font_label.render(opt[0], True, color)

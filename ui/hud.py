@@ -9,6 +9,7 @@ import pygame
 import config
 from models.player_car import PlayerCar
 from controller import Controller
+from ui.game_ui import draw_rounded_rect
 
 
 class PlayerHUD:
@@ -180,7 +181,7 @@ class PlayerHUD:
         panel = pygame.Surface((w, h), pygame.SRCALPHA)
         bg = (15, 15, 30, bg_alpha)
         panel.fill(bg)
-        pygame.draw.rect(panel, (40, 40, 60), panel.get_rect(), 1, border_radius=10)
+        draw_rounded_rect(panel, (40, 40, 60), panel.get_rect(), 10, 1)
         surface.blit(panel, (x, y))
 
     def _draw_score_panel_top_right(self, screen: pygame.Surface) -> None:
@@ -197,21 +198,19 @@ class PlayerHUD:
             self._score_panel_surf.fill((0, 0, 0, 0))
 
             bg = (15, 15, 30, 220)
-            pygame.draw.rect(
-                self._score_panel_surf, bg, (0, 0, panel_w, panel_h), border_radius=12
-            )
-            pygame.draw.rect(
+            draw_rounded_rect(self._score_panel_surf, bg, (0, 0, panel_w, panel_h), 12)
+            draw_rounded_rect(
                 self._score_panel_surf,
                 (40, 40, 60),
                 (0, 0, panel_w, panel_h),
+                12,
                 1,
-                border_radius=12,
             )
-            pygame.draw.rect(
+            draw_rounded_rect(
                 self._score_panel_surf,
                 self._accent_color,
                 (0, 0, panel_w, 3),
-                border_radius=12,
+                12,
             )
 
             score_text = f"{self.score or 0:,}"
@@ -316,15 +315,13 @@ class PlayerHUD:
 
         self._stats_panel_surf.fill((0, 0, 0, 0))
         bg = (15, 15, 30, 200)
-        pygame.draw.rect(
-            self._stats_panel_surf, bg, (0, 0, panel_w, panel_h), border_radius=10
-        )
-        pygame.draw.rect(
+        draw_rounded_rect(self._stats_panel_surf, bg, (0, 0, panel_w, panel_h), 10)
+        draw_rounded_rect(
             self._stats_panel_surf,
             (50, 50, 70),
             (0, 0, panel_w, panel_h),
+            10,
             1,
-            border_radius=10,
         )
 
         line_h = 22
@@ -393,8 +390,8 @@ class PlayerHUD:
             else (self._accent_color if state != "center" else self._muted_color)
         )
 
-        pygame.draw.rect(screen, bg_color, rect, border_radius=8)
-        pygame.draw.rect(screen, border_color, rect, 2, border_radius=8)
+        draw_rounded_rect(screen, bg_color, rect, 8)
+        draw_rounded_rect(screen, border_color, rect, 8, 2)
 
         cx, cy = x + size // 2, y + size // 2
 
@@ -404,7 +401,7 @@ class PlayerHUD:
             inner = size // 4
             bar_h = size // 2
             bar_rect = pygame.Rect(cx - inner, cy + inner // 2, inner * 2, bar_h)
-            pygame.draw.rect(screen, border_color, bar_rect, border_radius=3)
+            draw_rounded_rect(screen, border_color, bar_rect, 3)
         elif icon_type == "steer":
             if state == "left":
                 pts = [(cx - 8, cy), (cx + 6, cy - 8), (cx + 6, cy + 8)]

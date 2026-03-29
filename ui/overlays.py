@@ -3,6 +3,7 @@ from __future__ import annotations
 import pygame
 
 from models.question import Question
+from ui.game_ui import draw_rounded_rect
 
 
 def draw_question_overlay(
@@ -24,7 +25,7 @@ def draw_question_overlay(
         panel_w,
         panel_h,
     )
-    pygame.draw.rect(screen, (20, 20, 20), panel, border_radius=12)
+    draw_rounded_rect(screen, (20, 20, 20), panel, 12)
 
     if is_heart_question:
         border_color = (255, 100, 150)
@@ -39,7 +40,7 @@ def draw_question_overlay(
             "Answer correctly to survive!", True, (255, 200, 150)
         )
 
-    pygame.draw.rect(screen, border_color, panel, width=3, border_radius=12)
+    draw_rounded_rect(screen, border_color, panel, 12, 3)
 
     prompt = body_font.render(question.prompt, True, (255, 255, 255))
     key_range = ", ".join(str(i) for i in range(1, question.answer_count + 1))
@@ -94,8 +95,8 @@ def draw_game_over_overlay(
         panel_w,
         panel_h,
     )
-    pygame.draw.rect(screen, (25, 25, 25), panel, border_radius=12)
-    pygame.draw.rect(screen, (255, 80, 80), panel, width=3, border_radius=12)
+    draw_rounded_rect(screen, (25, 25, 25), panel, 12)
+    draw_rounded_rect(screen, (255, 80, 80), panel, 12, 3)
 
     title = title_font.render("GAME OVER", True, (255, 90, 90))
     score_text = body_font.render(f"Final Score: {final_score}", True, (255, 255, 255))
