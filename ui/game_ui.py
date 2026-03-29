@@ -6,7 +6,6 @@ Includes HUD display, pause menu, settings, and interactive elements.
 from __future__ import annotations
 
 import os
-import math
 from typing import Optional, Callable
 
 import cv2
@@ -15,7 +14,7 @@ import pygame
 import pygame.gfxdraw
 
 
-def draw_rounded_rect(surface, color, rect, radius, width=0):
+def draw_rounded_rect(surface, color, rect, width=0):
     if width == 0:
         pygame.gfxdraw.box(surface, rect, color)
     else:
@@ -62,8 +61,8 @@ class Button:
     def draw(self, surface: pygame.Surface) -> None:
         color = self.hover_color if self.is_hovered else self.bg_color
 
-        draw_rounded_rect(surface, color, self.rect, 8)
-        draw_rounded_rect(surface, self.border_color, self.rect, 8, 2)
+        draw_rounded_rect(surface, color, self.rect)
+        draw_rounded_rect(surface, self.border_color, self.rect, 2)
 
         text_surf = self.font.render(self.text, True, self.text_color)
         text_rect = text_surf.get_rect(center=self.rect.center)
@@ -114,12 +113,12 @@ class Slider:
             self.value = self.min_val + pct * (self.max_val - self.min_val)
 
     def draw(self, surface: pygame.Surface) -> None:
-        draw_rounded_rect(surface, self.track_color, self.track_rect, 3)
+        draw_rounded_rect(surface, self.track_color, self.track_rect)
 
         pct = (self.value - self.min_val) / (self.max_val - self.min_val)
         fill_width = int(self.width * pct)
         fill_rect = pygame.Rect(self.x, self.y + self.height // 2 - 3, fill_width, 6)
-        draw_rounded_rect(surface, self.accent_color, fill_rect, 3)
+        draw_rounded_rect(surface, self.accent_color, fill_rect)
 
         thumb_x = self.x + fill_width
         thumb_y = self.y + self.height // 2
@@ -245,9 +244,9 @@ class HUDManager:
         h: int,
         border: bool = True,
     ) -> None:
-        draw_rounded_rect(surface, (15, 20, 35, 200), (x, y, w, h), 12)
+        draw_rounded_rect(surface, (15, 20, 35, 200), (x, y, w, h))
         if border:
-            draw_rounded_rect(surface, self.accent_color, (x, y, w, h), 12, 1)
+            draw_rounded_rect(surface, self.accent_color, (x, y, w, h), 1)
 
     def _draw_speed_top_center(self, screen: pygame.Surface, sw: int) -> None:
         w, h = 180, 80
@@ -255,7 +254,7 @@ class HUDManager:
         y = 20
 
         self._draw_glass_panel(screen, x, y, w, h)
-        draw_rounded_rect(screen, self.accent_color, (x, y, w, 3), 8)
+        draw_rounded_rect(screen, self.accent_color, (x, y, w, 3))
 
         speed = int(self._speed_display)
         color = self.warn_color if self.is_braking else self.text_color
@@ -348,7 +347,7 @@ class HUDManager:
 
         if fill_w > 0:
             fill_rect = pygame.Rect(x + 2, y + 2, fill_w, bar_h - 4)
-            draw_rounded_rect(screen, fill_color, fill_rect, 4)
+            draw_rounded_rect(screen, fill_color, fill_rect)
 
         label = self.font_small.render("BOOST", True, self.muted_color)
         screen.blit(label, (sw // 2 - label.get_width() // 2, y - 18))
@@ -480,12 +479,10 @@ class PauseMenu:
         menu_x = sw // 2 - menu_w // 2
         menu_y = sh // 2 - menu_h // 2
 
+        draw_rounded_rect(screen, (20, 30, 50, 240), (menu_x, menu_y, menu_w, menu_h))
+        draw_rounded_rect(screen, self.accent_color, (menu_x, menu_y, menu_w, 4))
         draw_rounded_rect(
-            screen, (20, 30, 50, 240), (menu_x, menu_y, menu_w, menu_h), 12
-        )
-        draw_rounded_rect(screen, self.accent_color, (menu_x, menu_y, menu_w, 4), 12)
-        draw_rounded_rect(
-            screen, self.accent_color, (menu_x, menu_y, menu_w, menu_h), 12, 1
+            screen, self.accent_color, (menu_x, menu_y, menu_w, menu_h), 1
         )
 
         title = self.font_title.render("PAUSED", True, self.accent_color)
@@ -734,18 +731,18 @@ class SettingsMenu:
         panel_y = sh // 2 - panel_h // 2
 
         draw_rounded_rect(
-            screen, (20, 30, 50, 245), (panel_x, panel_y, panel_w, panel_h), 12
+            screen, (20, 30, 50, 245), (panel_x, panel_y, panel_w, panel_h)
         )
-        draw_rounded_rect(screen, self.accent_color, (panel_x, panel_y, panel_w, 4), 12)
+        draw_rounded_rect(screen, self.accent_color, (panel_x, panel_y, panel_w, 4))
         draw_rounded_rect(
-            screen, self.accent_color, (panel_x, panel_y, panel_w, panel_h), 12, 1
+            screen, self.accent_color, (panel_x, panel_y, panel_w, panel_h), 1
         )
 
         title = self.font_title.render("SETTINGS", True, self.accent_color)
         screen.blit(title, (panel_x + 30, panel_y + 20))
 
         close_btn = pygame.Rect(panel_x + panel_w - 50, panel_y + 15, 35, 35)
-        draw_rounded_rect(screen, (200, 80, 80), close_btn, 8)
+        draw_rounded_rect(screen, (200, 80, 80), close_btn)
         close_x = self.font_title.render("X", True, (255, 255, 255))
         screen.blit(close_x, (close_btn.x + 10, close_btn.y + 2))
         self._close_button = close_btn
