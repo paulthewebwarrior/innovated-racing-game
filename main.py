@@ -505,8 +505,8 @@ def main():
 
         base_speed = 10.0
         score = scoring_system.get_score()
-        speed_increments = score // 3000
-        new_max_speed = base_speed + (speed_increments * 0.5)
+        speed_increments = score // 300
+        new_max_speed = base_speed + speed_increments
         player_car.set_max_speed(new_max_speed)
 
         clock.tick(settings.max_fps)

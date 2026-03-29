@@ -4,7 +4,7 @@ class ScoringSystem:
         self.reset()
 
     def _load_config(self, config: dict) -> None:
-        self.base_points_per_second = config.get("base_points_per_second", 8.33)
+        self.base_points_per_distance = config.get("base_points_per_distance", 0.1)
         self.top_speed_threshold = config.get("top_speed_threshold", 0.90)
         self.top_speed_bonus = config.get("top_speed_bonus", 10)
         self.accel_bonus_threshold = config.get("accel_bonus_threshold", 8.0)
@@ -51,12 +51,14 @@ class ScoringSystem:
         self._update_difficulty(current_time)
         self._update_clean_drive(current_time, current_speed)
 
+        distance_traveled = current_speed * delta_time / 1000.0
+
         if is_braking:
             base_points = 0.0
         else:
             base_points = (
-                self.base_points_per_second
-                * (delta_time / 1000.0)
+                self.base_points_per_distance
+                * distance_traveled
                 * speed_ratio
                 * self.difficulty_multiplier
             )
